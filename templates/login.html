@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TSC Template Studio — Sign In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --blue-950: #060E1F;
+      --blue-900: #0A1628;
+      --blue-800: #0D2045;
+      --blue-700: #0F2D60;
+      --blue-600: #1547A0;
+      --blue-500: #1A5ED4;
+      --blue-400: #2B74F5;
+      --blue-300: #5B9BFF;
+      --blue-200: #A8C8FF;
+      --blue-100: #DCEEFF;
+      --blue-50:  #F0F6FF;
+      --white: #FFFFFF;
+      --gray-50:  #F7F9FC;
+      --gray-100: #EEF2F7;
+      --gray-200: #DDE3ED;
+      --gray-300: #C4CEDF;
+      --gray-400: #8A97AD;
+      --gray-500: #5E6B80;
+      --gray-600: #3D4B5E;
+      --gray-700: #273042;
+      --gray-800: #151E2D;
+      --error:        #C53030;
+      --error-bg:     #FFF5F5;
+      --error-border: #FED7D7;
+      --font: 'Geist', system-ui, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--gray-50);
+      color: var(--gray-800);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Left accent strip ── */
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: calc(100vh - 40px);
+    }
+
+    .left-panel {
+      background: var(--blue-900);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 48px 44px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Geometric accent shapes */
+    .left-panel::before {
+      content: '';
+      position: absolute;
+      top: -80px; right: -80px;
+      width: 280px; height: 280px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(43,116,245,0.25) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .left-panel::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; left: -60px;
+      width: 240px; height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(26,94,212,0.2) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .left-brand {
+      position: relative; z-index: 1;
+    }
+    .left-logo {
+      width: 40px; height: 40px;
+      background: var(--blue-400);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900;
+      color: var(--white);
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+    .left-brand h1 {
+      font-size: 22px; font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+    .left-brand p {
+      font-size: 13px; color: rgba(255,255,255,0.45);
+      font-weight: 400; line-height: 1.6;
+    }
+
+    .left-features {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .feature-item {
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .feature-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--blue-300);
+      margin-top: 6px; flex-shrink: 0;
+    }
+    .feature-item span {
+      font-size: 13px; color: rgba(255,255,255,0.55);
+      line-height: 1.6; font-weight: 400;
+    }
+
+    .left-footer {
+      position: relative; z-index: 1;
+      font-size: 11px; color: rgba(255,255,255,0.25);
+      font-weight: 400;
+    }
+
+    /* ── Right panel ── */
+    .right-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 48px;
+      background: var(--white);
+    }
+
+    .form-box {
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .form-heading {
+      font-size: 26px; font-weight: 800;
+      color: var(--gray-800);
+      letter-spacing: -0.6px;
+      margin-bottom: 6px;
+    }
+    .form-sub {
+      font-size: 14px;
+      color: var(--gray-400);
+      margin-bottom: 36px;
+      font-weight: 400;
+    }
+
+    /* Error */
+    .error-msg {
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 13px;
+      color: var(--error);
+      margin-bottom: 20px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+    .error-msg.show { display: flex; }
+    .error-icon { font-size: 14px; flex-shrink: 0; }
+
+    /* Fields */
+    .field { margin-bottom: 20px; }
+
+    label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .input-wrap { position: relative; }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      background: var(--gray-50);
+      border: 1.5px solid var(--gray-200);
+      color: var(--gray-800);
+      padding: 11px 42px 11px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: var(--font);
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      outline: none;
+      font-weight: 500;
+    }
+    input::placeholder { color: var(--gray-300); font-weight: 400; }
+    input:focus {
+      border-color: var(--blue-400);
+      background: var(--white);
+      box-shadow: 0 0 0 3px rgba(43,116,245,0.1);
+    }
+    input.error-field {
+      border-color: var(--error);
+      background: var(--error-bg);
+    }
+
+    .pwd-toggle {
+      position: absolute;
+      right: 13px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      color: var(--gray-300);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px;
+      transition: color 0.15s;
+      line-height: 1;
+    }
+    .pwd-toggle:hover { color: var(--gray-500); }
+
+    /* Submit */
+    .submit-btn {
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px 20px;
+      background: var(--blue-500);
+      color: var(--white);
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+      letter-spacing: 0.01em;
+    }
+    .submit-btn:hover:not(:disabled) {
+      background: var(--blue-400);
+      box-shadow: 0 4px 16px rgba(43,116,245,0.3);
+    }
+    .submit-btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+    .submit-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .spinner {
+      display: inline-block;
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      vertical-align: middle;
+      margin-right: 7px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .form-divider {
+      height: 1px;
+      background: var(--gray-100);
+      margin: 28px 0 20px;
+    }
+
+    .form-footer {
+      font-size: 12px;
+      color: var(--gray-400);
+      text-align: center;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Fixed Footer ── */
+    .page-footer {
+      height: 40px;
+      background: var(--white);
+      border-top: 1px solid var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11.5px;
+      color: var(--gray-400);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .page-footer strong {
+      color: var(--blue-500);
+      font-weight: 700;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      .left-panel { display: none; }
+      .right-panel { padding: 40px 24px; background: var(--gray-50); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Left branding panel -->
+  <div class="left-panel">
+    <div class="left-brand">
+      <div class="left-logo">T</div>
+      <h1>Template<br>Studio</h1>
+      <p>WhatsApp Business API<br>The Sleep Company · D2C Team</p>
+    </div>
+
+    <div class="left-features">
+      <div class="feature-item">
+        <div class="feature-dot"></div>
+        <span>Meta-compliant utility template generation with AI assistance</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot"></div>
+        <span>RAG pipeline trained on approved TSC WhatsApp templates</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot"></div>
+        <span>Auto-sanitised placeholders and banned-word enforcement</span>
+      </div>
+      <div class="feature-item">
+        <div class="feature-dot"></div>
+        <span>Session-based generation history with tag filtering</span>
+      </div>
+    </div>
+
+    <div class="left-footer">
+      Internal tool · The Sleep Company D2C
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="right-panel">
+    <div class="form-box">
+      <div class="form-heading">Sign in</div>
+      <div class="form-sub">Access Template Studio with your TSC credentials.</div>
+
+      <div class="error-msg" id="errorMsg">
+        <span class="error-icon">&#9888;</span>
+        <span id="errorText">Invalid credentials. Please try again.</span>
+      </div>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="field">
+          <label for="email">Email address</label>
+          <div class="input-wrap">
+            <input type="email" id="email" placeholder="you@thesleepcompany.in" autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password" required>
+            <button type="button" class="pwd-toggle" id="togglePwd" title="Toggle visibility">&#128065;</button>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span id="btnText">Sign In</span>
+        </button>
+      </form>
+
+      <div class="form-divider"></div>
+
+      <div class="form-footer">
+        Secure internal access &middot; The Sleep Company
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fixed footer -->
+<div class="page-footer">
+  Product by&nbsp;<strong>Abhishek Tiwari</strong>&nbsp;&middot; D2C Team &middot; The Sleep Company
+</div>
+
+<script>
+  // ── Shared fetch headers (fixes ngrok interstitial returning HTML instead of JSON) ──
+  const FETCH_HEADERS = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true'
+  };
+
+  const form      = document.getElementById('loginForm');
+  const emailEl   = document.getElementById('email');
+  const passEl    = document.getElementById('password');
+  const togglePwd = document.getElementById('togglePwd');
+  const submitBtn = document.getElementById('submitBtn');
+  const btnText   = document.getElementById('btnText');
+  const errorMsg  = document.getElementById('errorMsg');
+  const errorText = document.getElementById('errorText');
+
+  togglePwd.addEventListener('click', () => {
+    const isText = passEl.type === 'text';
+    passEl.type  = isText ? 'password' : 'text';
+    togglePwd.innerHTML = isText ? '&#128065;' : '&#128064;';
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    errorMsg.classList.remove('show');
+    emailEl.classList.remove('error-field');
+    passEl.classList.remove('error-field');
+
+    submitBtn.disabled = true;
+    btnText.innerHTML  = '<span class="spinner"></span>Signing in&hellip;';
+
+    try {
+      const res  = await fetch('/login', {
+        method:  'POST',
+        headers: FETCH_HEADERS,
+        body:    JSON.stringify({ email: emailEl.value.trim(), password: passEl.value })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        btnText.textContent  = '✓ Redirecting…';
+        window.location.href = '/';
+      } else {
+        emailEl.classList.add('error-field');
+        passEl.classList.add('error-field');
+        errorText.textContent = data.message || 'Invalid credentials. Please try again.';
+        errorMsg.classList.add('show');
+        passEl.value          = '';
+        submitBtn.disabled    = false;
+        btnText.textContent   = 'Sign In';
+      }
+    } catch (err) {
+      errorText.textContent = 'Network error — please try again.';
+      errorMsg.classList.add('show');
+      submitBtn.disabled    = false;
+      btnText.textContent   = 'Sign In';
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TSC Template Studio</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink:        #0D1117;
+      --ink-2:      #1C2333;
+      --ink-3:      #2D3748;
+      --muted:      #64748B;
+      --muted-2:    #94A3B8;
+      --border:     #E2E8F0;
+      --border-2:   #CBD5E1;
+      --surface:    #F8FAFC;
+      --surface-2:  #F1F5F9;
+      --card:       #FFFFFF;
+      --accent:     #1A56DB;
+      --accent-2:   #1E40AF;
+      --accent-glow:rgba(26,86,219,0.12);
+      --success:    #059669;
+      --success-bg: #ECFDF5;
+      --warning:    #D97706;
+      --warning-bg: #FFFBEB;
+      --error:      #DC2626;
+      --error-bg:   #FEF2F2;
+      --sidebar-w:  252px;
+      --header-h:   56px;
+      --radius:     8px;
+      --radius-lg:  12px;
+      --shadow-sm:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md:  0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-lg:  0 12px 32px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.06);
+      --transition: 0.18s cubic-bezier(0.4,0,0.2,1);
+      --font: 'DM Sans', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: var(--font);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── SCROLLBAR ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius:3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+    /* ── HEADER ──────────────────────────────────────────────── */
+    header {
+      position: fixed; top:0; left:0; right:0; height: var(--header-h);
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px 0 0;
+      z-index: 1000;
+      box-shadow: var(--shadow-sm);
+    }
+    .header-brand {
+      display: flex; align-items: center; gap: 0;
+      width: var(--sidebar-w);
+      padding: 0 20px;
+      border-right: 1px solid var(--border);
+      height: 100%;
+    }
+    .logo-mark {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, var(--accent) 0%, #3B82F6 100%);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: #fff;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(26,86,219,0.3);
+    }
+    .brand-name {
+      font-size: 15px; font-weight: 700; color: var(--ink);
+      margin-left: 10px; letter-spacing: -0.3px;
+    }
+    .brand-name span { color: var(--accent); }
+    .header-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .header-badge {
+      font-size: 11px; font-weight: 600;
+      background: var(--success-bg); color: var(--success);
+      padding: 3px 8px; border-radius: 20px;
+      border: 1px solid #A7F3D0;
+      letter-spacing: 0.3px;
+    }
+    .header-stat {
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .header-stat strong { color: var(--ink); font-weight: 600; }
+    .profile-wrap { position: relative; }
+    .profile-btn {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent) 0%, #3B82F6 100%);
+      border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; color: #fff; font-weight: 700;
+      box-shadow: 0 2px 6px rgba(26,86,219,0.3);
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+    .profile-btn:hover { transform: scale(1.05); box-shadow: 0 4px 10px rgba(26,86,219,0.4); }
+    .profile-dropdown {
+      position: absolute; top: 40px; right: 0;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow-lg);
+      width: 180px; display: none; flex-direction: column; overflow: hidden;
+      z-index: 1001; animation: dropIn 0.15s ease;
+    }
+    @keyframes dropIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+    .profile-dropdown.show { display: flex; }
+    .profile-dropdown a {
+      padding: 10px 16px; text-decoration: none; color: var(--ink-3);
+      font-size: 13px; transition: background var(--transition);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .profile-dropdown a:hover { background: var(--surface); }
+
+    /* ── SIDEBAR ─────────────────────────────────────────────── */
+    .sidebar {
+      position: fixed; top: var(--header-h); left: 0;
+      width: var(--sidebar-w);
+      height: calc(100vh - var(--header-h));
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      overflow-y: auto; z-index: 900;
+      padding: 16px 0;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+      color: var(--muted-2); text-transform: uppercase;
+      padding: 8px 20px 4px;
+    }
+    .sidebar nav ul { list-style: none; }
+    .sidebar nav li { margin: 2px 8px; }
+    .sidebar nav a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; color: var(--muted);
+      text-decoration: none; border-radius: 6px;
+      font-size: 13.5px; font-weight: 500;
+      transition: all var(--transition);
+    }
+    .sidebar nav a:hover { background: var(--surface); color: var(--ink); }
+    .sidebar nav a.active {
+      background: var(--accent-glow); color: var(--accent);
+      font-weight: 600;
+    }
+    .nav-icon {
+      width: 20px; height: 20px; display: flex; align-items: center;
+      justify-content: center; font-size: 15px; flex-shrink: 0;
+    }
+    .nav-badge {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      background: var(--accent); color: #fff;
+      padding: 1px 6px; border-radius: 10px; min-width: 18px;
+      text-align: center;
+    }
+    
+
+    /* ── MAIN ────────────────────────────────────────────────── */
+    main {
+      margin-left: var(--sidebar-w);
+      margin-top: var(--header-h);
+      min-height: calc(100vh - var(--header-h));
+      padding: 28px;
+    }
+    .section { display: none; }
+    .section.active { display: block; animation: fadeUp 0.2s ease; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── PAGE HEADER ─────────────────────────────────────────── */
+    .page-header {
+      margin-bottom: 24px;
+    }
+    .page-header h1 {
+      font-size: 22px; font-weight: 700; color: var(--ink);
+      letter-spacing: -0.5px; margin-bottom: 4px;
+    }
+    .page-header p { font-size: 13.5px; color: var(--muted); }
+
+    /* ── GENERATOR CARD ──────────────────────────────────────── */
+    .generator-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px;
+      box-shadow: var(--shadow-sm); margin-bottom: 20px;
+    }
+    .input-label {
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.6px;
+      margin-bottom: 8px; display: block;
+    }
+    textarea {
+      width: 100%; background: var(--surface);
+      border: 1.5px solid var(--border); color: var(--ink);
+      padding: 14px; border-radius: var(--radius);
+      font-size: 14px; font-family: var(--font);
+      resize: vertical; min-height: 110px;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      line-height: 1.6;
+    }
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      outline: none; background: var(--card);
+    }
+    textarea::placeholder { color: var(--muted-2); }
+    .char-count {
+      font-size: 11px; color: var(--muted-2);
+      text-align: right; margin-top: 4px;
+    }
+    .char-count.warn { color: var(--warning); }
+    .action-row {
+      display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; font-size: 13.5px; font-weight: 600;
+      border: none; border-radius: var(--radius); cursor: pointer;
+      transition: all var(--transition); font-family: var(--font);
+      letter-spacing: -0.1px;
+    }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 1px 4px rgba(26,86,219,0.3);
+    }
+    .btn-primary:hover { background: var(--accent-2); box-shadow: 0 3px 10px rgba(26,86,219,0.35); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { background: var(--muted-2); box-shadow: none; cursor: not-allowed; transform: none; }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1.5px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--surface); color: var(--ink); border-color: var(--border-2); }
+    .btn-sm {
+      padding: 6px 12px; font-size: 12px;
+    }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #047857; }
+
+    /* ── LOADING ─────────────────────────────────────────────── */
+    .loading-wrap {
+      display: flex; align-items: center; gap: 10px;
+      padding: 20px; color: var(--muted); font-size: 13px;
+    }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border-2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-steps { display: flex; flex-direction: column; gap: 2px; }
+    .loading-step { font-size: 12px; color: var(--muted-2); }
+    .loading-step.active { color: var(--accent); font-weight: 600; }
+
+    /* ── META INFO BAR ───────────────────────────────────────── */
+    .meta-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .meta-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px;
+    }
+    .chip-utility { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+    .chip-confidence-high { background: var(--success-bg); color: var(--success); border: 1px solid #A7F3D0; }
+    .chip-confidence-mid { background: var(--warning-bg); color: var(--warning); border: 1px solid #FDE68A; }
+    .chip-confidence-low { background: var(--error-bg); color: var(--error); border: 1px solid #FCA5A5; }
+    .meta-divider { width: 1px; height: 16px; background: var(--border); }
+    .meta-label { font-size: 12px; color: var(--muted); }
+    .meta-value { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+
+    /* ── WARNING BANNER ──────────────────────────────────────── */
+    .warning-banner {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--warning-bg); border: 1px solid #FDE68A;
+      border-radius: var(--radius); padding: 12px 16px;
+      margin-bottom: 16px; font-size: 13px; color: #92400E;
+    }
+
+    /* ── VARIATION CARDS ─────────────────────────────────────── */
+    .variations-grid { display: flex; flex-direction: column; gap: 12px; }
+    .variation-card {
+      background: var(--card); border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow var(--transition), border-color var(--transition);
+    }
+    .variation-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-2); }
+    .variation-card.top-pick { border-color: var(--accent); }
+    .variation-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .variation-num {
+      width: 24px; height: 24px;
+      background: var(--ink); color: #fff;
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .top-pick .variation-num { background: var(--accent); }
+    .variation-type {
+      font-size: 13px; font-weight: 600; color: var(--ink-3);
+    }
+    .top-pick-badge {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      background: var(--accent); color: #fff;
+      padding: 2px 8px; border-radius: 10px; letter-spacing: 0.3px;
+    }
+    .variation-score {
+      margin-left: auto; font-size: 11px; font-weight: 700;
+    }
+    .score-high { color: var(--success); }
+    .score-mid { color: var(--warning); }
+    .score-low { color: var(--error); }
+    .validation-pills {
+      display: flex; gap: 5px; flex-wrap: wrap; padding: 8px 16px;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .vpill {
+      font-size: 10.5px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+      display: flex; align-items: center; gap: 3px;
+    }
+    .vpill-pass { background: var(--success-bg); color: var(--success); }
+    .vpill-fail { background: var(--error-bg); color: var(--error); }
+    .variation-body { padding: 16px; }
+    .template-text {
+      font-family: var(--font-mono); font-size: 12.5px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 14px;
+      white-space: pre-wrap; line-height: 1.7;
+      color: var(--ink-3); position: relative;
+      margin-bottom: 12px;
+    }
+    .template-text .placeholder-token {
+      background: #EFF6FF; color: var(--accent);
+      border-radius: 3px; padding: 0 3px;
+      font-weight: 600;
+    }
+    .variation-rationale {
+      font-size: 12px; color: var(--muted);
+      line-height: 1.6; margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #F8FAFF;
+      border-left: 3px solid var(--accent);
+      border-radius: 0 4px 4px 0;
+    }
+    .variation-actions {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .feedback-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-left: auto;
+      font-size: 12px; color: var(--muted);
+    }
+    .feedback-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      border-radius: 6px; border: 1.5px solid var(--border);
+      background: transparent; cursor: pointer;
+      transition: all var(--transition); font-family: var(--font);
+    }
+    .feedback-btn:hover { border-color: var(--border-2); background: var(--surface); }
+    .feedback-btn.approved { background: var(--success-bg); border-color: #A7F3D0; color: var(--success); }
+    .feedback-btn.rejected { background: var(--error-bg); border-color: #FCA5A5; color: var(--error); }
+
+    /* ── HISTORY SECTION ─────────────────────────────────────── */
+    .history-layout {
+      display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+      height: calc(100vh - var(--header-h) - 80px);
+    }
+    .history-list-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .history-panel-header {
+      padding: 16px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .history-panel-header h3 { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .history-search {
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+    }
+    .history-search input {
+      width: 100%; padding: 7px 10px;
+      border: 1.5px solid var(--border); border-radius: 6px;
+      font-size: 12.5px; font-family: var(--font); color: var(--ink);
+      background: var(--surface); outline: none;
+      transition: border-color var(--transition);
+    }
+    .history-search input:focus { border-color: var(--accent); background: var(--card); }
+    .history-items { overflow-y: auto; flex: 1; }
+    .history-item {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background var(--transition);
+    }
+    .history-item:hover { background: var(--surface); }
+    .history-item.active { background: var(--accent-glow); border-left: 3px solid var(--accent); }
+    .history-item-prompt {
+      font-size: 12.5px; font-weight: 600; color: var(--ink-3);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .history-item-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--muted-2);
+    }
+    .history-item-count {
+      background: var(--surface-2); color: var(--muted);
+      padding: 1px 6px; border-radius: 8px; font-weight: 600;
+    }
+    .history-detail-panel {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow-y: auto;
+      padding: 24px;
+    }
+    .history-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; gap: 12px;
+      color: var(--muted-2); text-align: center;
+    }
+    .history-empty-icon { font-size: 40px; opacity: 0.4; }
+    .history-empty h3 { font-size: 15px; font-weight: 600; color: var(--muted); }
+    .history-empty p { font-size: 13px; max-width: 220px; line-height: 1.6; }
+
+    /* ── ANALYTICS ───────────────────────────────────────────── */
+    .analytics-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .stat-label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--ink); letter-spacing: -1px; }
+    .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .stat-trend { font-size: 11.5px; font-weight: 600; margin-top: 6px; }
+    .trend-up { color: var(--success); }
+    .trend-down { color: var(--error); }
+    .analytics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .analytics-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm);
+    }
+    .analytics-card h3 { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 16px; }
+    .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; }
+    .bar-label { font-size: 12px; color: var(--muted); width: 120px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+    .bar-val { font-size: 11.5px; font-weight: 700; color: var(--ink-3); width: 28px; text-align: right; }
+    .donut-wrap { display: flex; align-items: center; gap: 20px; }
+    .donut-svg { flex-shrink: 0; }
+    .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-val { font-weight: 700; color: var(--ink-3); margin-left: auto; }
+    .intent-list { display: flex; flex-direction: column; gap: 8px; }
+    .intent-row { display: flex; align-items: center; gap: 8px; }
+    .intent-tag {
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+      background: var(--surface-2); color: var(--muted);
+      white-space: nowrap;
+    }
+    .intent-bar-track { flex: 1; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+    .intent-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+    .intent-count { font-size: 11px; font-weight: 700; color: var(--muted); width: 24px; text-align: right; }
+
+    /* ── DOCS SECTION ────────────────────────────────────────── */
+    .docs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .doc-card {
+      background: var(--card); border: 1.5px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      text-decoration: none; color: inherit;
+      transition: all var(--transition); cursor: pointer;
+    }
+    .doc-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .doc-icon { font-size: 24px; margin-bottom: 10px; }
+    .doc-title { font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+    .doc-desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+
+    /* ── TOAST ───────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--ink); color: #fff;
+      padding: 10px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: var(--shadow-lg);
+      opacity: 0; transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+      z-index: 10000; display: flex; align-items: center; gap: 8px;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .hidden { display: none !important; }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────── */
+    @media (max-width: 1200px) {
+      .analytics-grid { grid-template-columns: repeat(2, 1fr); }
+      .docs-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 900px) {
+      .history-layout { grid-template-columns: 1fr; height: auto; }
+      .analytics-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────── -->
+<header>
+  <div class="header-brand">
+    <div class="logo-mark">TS</div>
+    <span class="brand-name">TSC <span>Template</span> Studio</span>
+  </div>
+  <div class="header-right">
+    <span class="header-badge">● Live</span>
+    <div class="header-stat">
+      <span>Sessions today:</span>
+      <strong id="headerSessionCount">0</strong>
+    </div>
+    <div class="header-stat">
+      <span>Approval rate:</span>
+      <strong id="headerApprovalRate">—</strong>
+    </div>
+    <div class="profile-wrap">
+      <button class="profile-btn" id="profileBtn">AT</button>
+      <div class="profile-dropdown" id="profileDropdown">
+        <a href="#">👤 Abhishek Tiwari</a>
+        <a href="#">⚙️ Settings</a>
+        <a href="#">🚪 Logout</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── SIDEBAR ────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-section-label">Generate</div>
+  <nav>
+    <ul>
+      <li><a href="#generator" class="active" data-section="generator">
+        <span class="nav-icon">⚡</span> Template Generator
+      </a></li>
+    </ul>
+  </nav>
+  <div class="sidebar-section-label" style="margin-top:8px;">History</div>
+  <nav>
+    <ul>
+      <li><a href="#history" data-section="history">
+        <span class="nav-icon">🕐</span> Generation History
+        <span class="nav-badge" id="historyBadge">0</span>
+      </a></li>
+    </ul>
+  </nav>
+  <div class="sidebar-section-label" style="margin-top:8px;">Insights</div>
+  <nav>
+    <ul>
+      <li><a href="#analytics" data-section="analytics">
+        <span class="nav-icon">📊</span> Analytics
+      </a></li>
+      <li><a href="#docs" data-section="docs">
+        <span class="nav-icon">📄</span> Documentation
+      </a></li>
+    </ul>
+  </nav>
+
+</aside>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- GENERATOR SECTION -->
+  <section id="generator" class="section active">
+    <div class="page-header">
+      <h1>WhatsApp Template Generator</h1>
+      <p>Describe your template intent — the tool will generate 5 Meta-compliant Utility variations.</p>
+    </div>
+
+    <div class="generator-card">
+      <label class="input-label" for="inputText">Template Request</label>
+      <textarea id="inputText" placeholder="Describe your template request — e.g. order confirmation, store visit follow-up, seasonal pricing update..."></textarea>
+      <div class="char-count" id="charCount">0 characters</div>
+      <div class="action-row">
+        <button class="btn btn-primary" id="generateBtn">
+          <span>⚡</span> Generate Variations
+        </button>
+        <button class="btn btn-ghost" id="regenerateBtn">
+          <span>↺</span> Regenerate
+        </button>
+        <button class="btn btn-ghost btn-sm" id="clearBtn">Clear</button>
+      </div>
+    </div>
+
+    <div id="loadingWrap" class="hidden">
+      <div class="loading-wrap">
+        <div class="spinner"></div>
+        <div class="loading-steps">
+          <div class="loading-step active" id="step1">Analysing intent...</div>
+          <div class="loading-step" id="step2">Extracting structured facts...</div>
+          <div class="loading-step" id="step3">Generating 5 variations...</div>
+          <div class="loading-step" id="step4">Validating structure...</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="results" class="hidden">
+      <div id="metaBar" class="meta-bar"></div>
+      <div id="warningBanner" class="warning-banner hidden"></div>
+      <div id="variationsWrap" class="variations-grid"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY SECTION -->
+  <section id="history" class="section">
+    <div class="page-header">
+      <h1>Generation History</h1>
+      <p>All your previous template generations, stored locally in this session.</p>
+    </div>
+    <div class="history-layout">
+      <div class="history-list-panel">
+        <div class="history-panel-header">
+          <h3>Sessions</h3>
+          <button class="btn btn-ghost btn-sm" id="clearHistoryBtn">Clear All</button>
+        </div>
+        <div class="history-search">
+          <input type="text" id="historySearch" placeholder="Search sessions...">
+        </div>
+        <div class="history-items" id="historyList">
+          <div style="padding:32px 16px; text-align:center; color:var(--muted-2); font-size:13px;">
+            No sessions yet. Generate some templates to see history.
+          </div>
+        </div>
+      </div>
+      <div class="history-detail-panel" id="historyDetail">
+        <div class="history-empty">
+          <div class="history-empty-icon">🕐</div>
+          <h3>Select a session</h3>
+          <p>Click a session on the left to view generated templates.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANALYTICS SECTION -->
+  <section id="analytics" class="section">
+    <div class="page-header">
+      <h1>Analytics</h1>
+      <p>Session-level insights into your template generation activity.</p>
+    </div>
+    <div class="analytics-grid" id="analyticsStats"></div>
+    <div class="analytics-row">
+      <div class="analytics-card">
+        <h3>Intent Distribution</h3>
+        <div class="intent-list" id="intentChart"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>Validation Pass Rate by Check</h3>
+        <div class="bar-chart" id="validationChart"></div>
+      </div>
+    </div>
+    <div class="analytics-row">
+      <div class="analytics-card">
+        <h3>Confidence Score Distribution</h3>
+        <div class="donut-wrap" id="confidenceChart"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>Top Variation Types Used</h3>
+        <div class="bar-chart" id="variationTypeChart"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOCS SECTION -->
+  <section id="docs" class="section">
+    <div class="page-header">
+      <h1>Documentation</h1>
+      <p>Reference guides for using TSC Template Studio effectively. Click any card to expand.</p>
+    </div>
+
+    <style>
+      .doc-card { cursor:pointer; }
+      .doc-body {
+        display:none; margin-top:14px; padding-top:14px;
+        border-top:1px solid var(--border);
+        font-size:13px; color:var(--muted); line-height:1.8;
+      }
+      .doc-body.open { display:block; }
+      .doc-card.expanded { border-color:var(--accent); box-shadow:var(--shadow-md); }
+      .doc-toggle { float:right; font-size:16px; color:var(--muted-2); transition:transform 0.2s; }
+      .doc-card.expanded .doc-toggle { transform:rotate(180deg); }
+      .doc-body code {
+        font-family:var(--font-mono); font-size:12px;
+        background:var(--surface-2); padding:2px 6px; border-radius:4px;
+        color:var(--accent); border:1px solid var(--border);
+      }
+      .doc-body pre {
+        background:var(--surface); border:1px solid var(--border);
+        border-radius:8px; padding:14px; font-family:var(--font-mono);
+        font-size:12px; line-height:1.8; color:var(--ink-3);
+        overflow-x:auto; margin:10px 0; white-space:pre-wrap;
+      }
+      .doc-body ul { padding-left:18px; margin:8px 0; }
+      .doc-body li { margin-bottom:4px; }
+      .doc-body strong { color:var(--ink-3); font-weight:600; }
+      .doc-body .rule-pass { color:var(--success); font-weight:600; }
+      .doc-body .rule-fail { color:var(--error); font-weight:600; }
+      .doc-tip {
+        background:var(--accent-glow); border-left:3px solid var(--accent);
+        border-radius:0 6px 6px 0; padding:10px 14px;
+        font-size:12.5px; color:var(--ink-3); margin:10px 0;
+      }
+    </style>
+
+    <div class="docs-grid" id="docsGrid">
+
+      <div class="doc-card" data-doc="quickstart">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">⚡</div>
+        <div class="doc-title">Quick Start Guide</div>
+        <div class="doc-desc">Generate your first Meta-compliant Utility template in under 2 minutes.</div>
+        <div class="doc-body">
+          <strong>Step 1 — Describe your intent</strong>
+          <p>Type what the template should communicate in plain English. No need to write the template yourself.</p>
+          <div class="doc-tip">💡 Be specific: "Order confirmed for SmartGRID mattress, include order ID and delivery date" works better than "order update".</div>
+          <strong style="display:block;margin-top:12px;">Step 2 — Generate</strong>
+          <p>Click <strong>Generate Variations</strong> or press <code>Ctrl+Enter</code>. The tool runs in two stages: first it extracts the intent, then generates 5 structured variations.</p>
+          <strong style="display:block;margin-top:12px;">Step 3 — Pick and copy</strong>
+          <p>The top 2 variations are marked <strong>Recommended</strong> based on validation scores. Copy the one you want to submit to Meta.</p>
+          <strong style="display:block;margin-top:12px;">Step 4 — Log the result</strong>
+          <p>After submitting to Meta, click <strong>Approved</strong> or <strong>Rejected</strong> on the card. This logs your result and improves future generation quality.</p>
+        </div>
+      </div>
+
+      <div class="doc-card" data-doc="metarules">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">🛡️</div>
+        <div class="doc-title">Meta Utility Rules</div>
+        <div class="doc-desc">What Meta requires for Utility approval and what causes rejections.</div>
+        <div class="doc-body">
+          <p>Meta evaluates Utility templates against a strict set of criteria. The most common rejection reasons are:</p>
+          <ul>
+            <li><span class="rule-fail">✗</span> Promotional language — offers, discounts, urgency phrases</li>
+            <li><span class="rule-fail">✗</span> Exclamation marks anywhere in the body</li>
+            <li><span class="rule-fail">✗</span> Emojis used decoratively (✔ ⭐ etc.)</li>
+            <li><span class="rule-fail">✗</span> Placeholder gaps — <code>{{1}}</code>, <code>{{3}}</code> skipping <code>{{2}}</code></li>
+            <li><span class="rule-fail">✗</span> Template over 1024 characters</li>
+            <li><span class="rule-fail">✗</span> No structured details block with labelled fields</li>
+            <li><span class="rule-fail">✗</span> Vague closings: "feel free", "don't hesitate", "we're here for you"</li>
+          </ul>
+          <div class="doc-tip">💡 All 6 of these checks run automatically on every generated variation. Green pills = pass, red pills = fail.</div>
+          <strong style="display:block;margin-top:12px;">What Meta approves</strong>
+          <ul>
+            <li><span class="rule-pass">✓</span> Factual, transactional tone — like an official notification</li>
+            <li><span class="rule-pass">✓</span> Sequential placeholders <code>{{1}}</code> <code>{{2}}</code> <code>{{3}}</code></li>
+            <li><span class="rule-pass">✓</span> At least one labelled details line: <code>Order ID: {{2}}</code></li>
+            <li><span class="rule-pass">✓</span> Clear action sentence at the end</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="doc-card" data-doc="paths">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">🔄</div>
+        <div class="doc-title">Path A vs Path B</div>
+        <div class="doc-desc">When to use Image Notification vs Standard 4-Part Utility.</div>
+        <div class="doc-body">
+          <strong>Path A — Image Notification</strong>
+          <p>Used when the input is promotional or campaign-based. The actual offer details live inside an image — the template text stays neutral.</p>
+          <pre>Hi {{1}},
+We have shared an image with details regarding the {{2}}.
+The image contains information about the {{3}}.
+
+Campaign Name: {{2}}
+Reference: {{4}}
+
+If you have any questions, please contact us at {{5}}.</pre>
+          <div class="doc-tip">💡 <code>{{2}}</code> is the campaign name variable. The body never mentions "sale", "offer", or "discount" — those live in the image.</div>
+          <strong style="display:block;margin-top:14px;">Path B — Standard 4-Part Utility</strong>
+          <p>Used for transactional inputs: orders, deliveries, returns, appointments, store visits, custom orders.</p>
+          <pre>Your order has been confirmed and is being processed.
+
+Your item will be dispatched within 2 business days.
+
+Product Name: {{1}}
+Order ID: {{2}}
+Delivery Date: {{3}}
+
+To track your order, visit our website or contact us at {{4}}.</pre>
+        </div>
+      </div>
+
+      <div class="doc-card" data-doc="placeholders">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">📋</div>
+        <div class="doc-title">Placeholder Rules</div>
+        <div class="doc-desc">How placeholders work and why sequential numbering matters.</div>
+        <div class="doc-body">
+          <p>Every dynamic value in a template must be a numbered placeholder. Meta requires them to be sequential with no gaps.</p>
+          <strong style="display:block;margin-top:10px;">Correct format</strong>
+          <pre>Product Name: {{1}}
+Order ID: {{2}}
+Delivery Date: {{3}}
+Store Contact: {{4}}</pre>
+          <strong style="display:block;margin-top:10px;">Wrong formats</strong>
+          <ul>
+            <li><span class="rule-fail">✗</span> <code>{{CustomerName}}</code> — descriptive names not allowed</li>
+            <li><span class="rule-fail">✗</span> <code>{{1}}, {{3}}</code> — gap at {{2}}, will be rejected</li>
+            <li><span class="rule-fail">✗</span> <code>Product Name - {{2}}</code> — dash instead of colon</li>
+            <li><span class="rule-fail">✗</span> <code>Product Name: SmartGRID {{2}}</code> — text between label and placeholder</li>
+          </ul>
+          <div class="doc-tip">💡 The tool auto-renumbers placeholders after every generation. If you see a gap in the validation pills, the fix-retry will correct it automatically.</div>
+        </div>
+      </div>
+
+      <div class="doc-card" data-doc="approval">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">📈</div>
+        <div class="doc-title">Improving Approval Rate</div>
+        <div class="doc-desc">Tips to push your Meta approval rate toward 90%+.</div>
+        <div class="doc-body">
+          <strong>Use the Confidence Score</strong>
+          <p>Every generation returns a confidence score (0–100). Green = High (≥80%), Amber = Medium (60–79%), Red = Low (&lt;60%). Only submit High confidence templates to Meta to avoid burning submission attempts.</p>
+          <strong style="display:block;margin-top:12px;">Pick Recommended variations</strong>
+          <p>The top 2 variations are automatically scored and tagged as Recommended. These have the fewest validation failures and the highest structural quality.</p>
+          <strong style="display:block;margin-top:12px;">Log every result</strong>
+          <p>Click Approved or Rejected after every Meta submission. Approved templates get ingested back into the ChromaDB training set — the tool gets smarter with every submission.</p>
+          <strong style="display:block;margin-top:12px;">Check the Analytics tab</strong>
+          <p>The Analytics tab shows your real-time approval rate, validation pass rates per check, and confidence distribution. Use it to identify which check is failing most often.</p>
+          <div class="doc-tip">💡 Target: keep average confidence above 80% and only submit Green-rated variations. This alone should keep approval rate above 85%.</div>
+        </div>
+      </div>
+
+      <div class="doc-card" data-doc="feedback">
+        <div class="doc-toggle">▾</div>
+        <div class="doc-icon">🔁</div>
+        <div class="doc-title">Feedback Loop</div>
+        <div class="doc-desc">How approved templates improve future generation quality.</div>
+        <div class="doc-body">
+          <strong>How it works</strong>
+          <p>When you mark a variation as <strong>Approved</strong> after Meta whitelists it, the system:</p>
+          <ul>
+            <li>Logs the result to the local SQLite feedback database</li>
+            <li>Embeds the approved template and adds it to ChromaDB <code>utility_coll</code></li>
+            <li>Future generations query this collection for RAG examples</li>
+            <li>The model sees your real approved templates as reference — quality improves over time</li>
+          </ul>
+          <div class="doc-tip">💡 The more you log results, the better the tool gets. After 50+ approved templates in ChromaDB, generation quality improves noticeably.</div>
+          <strong style="display:block;margin-top:12px;">Rejection logging</strong>
+          <p>Rejected results are also stored in SQLite with the rejection reason. Once 200+ labelled examples accumulate, the rejection classifier pipeline will activate automatically to pre-filter low-quality generations before they reach Groq.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<footer style="
+  margin-left:var(--sidebar-w);
+  padding:14px 28px;
+  border-top:1px solid var(--border);
+  background:var(--card);
+  font-size:12px;
+  color:var(--muted-2);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+">
+  <span>Product by <strong style="color:var(--muted);font-weight:600;">Abhishek Tiwari</strong> &middot; D2C</span>
+  <span>TSC Template Studio &middot; The Sleep Company</span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>{% raw %}
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let history = JSON.parse(localStorage.getItem('tsc_history') || '[]');
+let activeHistoryId = null;
+let lastInput = '';
+let currentData = null;
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const toast = (msg, type = 'default') => {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.background = type === 'success' ? '#059669' : type === 'error' ? '#DC2626' : 'var(--ink)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+};
+
+const saveHistory = () => localStorage.setItem('tsc_history', JSON.stringify(history));
+
+const formatTime = ts => {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) + ' · ' +
+         d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
+
+function highlightPlaceholders(text) {
+  return text.replace(/\{\{(\d+)\}\}/g, '<span class="placeholder-token">{{$1}}</span>');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+const navLinks = document.querySelectorAll('.sidebar nav a');
+const sections = document.querySelectorAll('.section');
+
+navLinks.forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const id = link.dataset.section;
+    sections.forEach(s => s.classList.remove('active'));
+    navLinks.forEach(l => l.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    link.classList.add('active');
+    if (id === 'history') renderHistoryList();
+    if (id === 'analytics') renderAnalytics();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PROFILE DROPDOWN
+// ═══════════════════════════════════════════════════════════════
+$('profileBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  $('profileDropdown').classList.toggle('show');
+});
+document.addEventListener('click', () => $('profileDropdown').classList.remove('show'));
+
+// ═══════════════════════════════════════════════════════════════
+// CHAR COUNT
+// ═══════════════════════════════════════════════════════════════
+$('inputText').addEventListener('input', () => {
+  const len = $('inputText').value.length;
+  const el = $('charCount');
+  el.textContent = `${len} characters`;
+  el.className = 'char-count' + (len > 400 ? ' warn' : '');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// LOADING ANIMATION
+// ═══════════════════════════════════════════════════════════════
+let loadingInterval;
+function startLoadingAnim() {
+  const steps = ['step1','step2','step3','step4'];
+  let i = 0;
+  steps.forEach(s => { $(s).className = 'loading-step'; });
+  $(steps[0]).className = 'loading-step active';
+  loadingInterval = setInterval(() => {
+    steps.forEach(s => $(s).className = 'loading-step');
+    i = (i + 1) % steps.length;
+    $(steps[i]).className = 'loading-step active';
+  }, 900);
+}
+function stopLoadingAnim() {
+  clearInterval(loadingInterval);
+  ['step1','step2','step3','step4'].forEach(s => $(s).className = 'loading-step');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VALIDATION PILLS
+// ═══════════════════════════════════════════════════════════════
+function buildValidationPills(validation) {
+  if (!validation) return '';
+  const checks = [
+    { label: '≤1024 chars', pass: !validation.errors?.some(e => e.includes('1024')) },
+    { label: 'No !', pass: !validation.errors?.some(e => e.includes('exclamation')) },
+    { label: 'Sequential {{N}}', pass: !validation.errors?.some(e => e.includes('sequential')) },
+    { label: 'Details block', pass: !validation.errors?.some(e => e.includes('details block')) },
+    { label: 'Action sentence', pass: !validation.errors?.some(e => e.includes('ends with')) },
+    { label: 'No promo words', pass: !validation.errors?.some(e => e.includes('promotional')) },
+  ];
+  return checks.map(c =>
+    `<span class="vpill ${c.pass ? 'vpill-pass' : 'vpill-fail'}">${c.pass ? '✓' : '✗'} ${c.label}</span>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER VARIATIONS
+// ═══════════════════════════════════════════════════════════════
+function renderVariations(data, inputText) {
+  const wrap = $('variationsWrap');
+  wrap.innerHTML = '';
+
+  // Meta bar
+  const conf = data.confidence ?? 0;
+  const confClass = conf >= 80 ? 'chip-confidence-high' : conf >= 60 ? 'chip-confidence-mid' : 'chip-confidence-low';
+  const confLabel = conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
+  $('metaBar').innerHTML = `
+    <span class="meta-chip chip-utility">🛡️ ${data.classification || 'Utility'}</span>
+    <span class="meta-divider"></span>
+    <span class="meta-chip ${confClass}">Confidence: ${conf}/100 — ${confLabel}</span>
+    <span class="meta-divider"></span>
+    <span class="meta-label">Variations generated:</span>
+    <span class="meta-value">${data.variations?.length || 0}</span>
+    <span class="meta-divider"></span>
+    <span class="meta-label">Input:</span>
+    <span class="meta-value" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${inputText.substring(0, 60)}${inputText.length > 60 ? '…' : ''}</span>
+  `;
+
+  // Warning
+  if (data.warning) {
+    $('warningBanner').innerHTML = `⚠️ ${data.warning}`;
+    $('warningBanner').classList.remove('hidden');
+  } else {
+    $('warningBanner').classList.add('hidden');
+  }
+
+  const vars = Array.isArray(data.variations) ? data.variations : [];
+  if (!vars.length) {
+    wrap.innerHTML = '<p style="color:var(--error);padding:16px;">No variations generated. Try rephrasing your input.</p>';
+    return;
+  }
+
+  // Score all variations
+  const scored = vars.map(v => {
+    const errs = v.validation?.errors?.length || 0;
+    const score = Math.max(0, 100 - errs * 20);
+    return { ...v, score };
+  }).sort((a, b) => b.score - a.score);
+
+  scored.forEach((v, idx) => {
+    const isTop = idx < 2;
+    const scoreClass = v.score >= 80 ? 'score-high' : v.score >= 60 ? 'score-mid' : 'score-low';
+    const template = v.template || '(No content)';
+
+    const card = document.createElement('div');
+    card.className = 'variation-card' + (isTop ? ' top-pick' : '');
+    card.innerHTML = `
+      <div class="variation-header">
+        <div class="variation-num">${v.id}</div>
+        <span class="variation-type">${v.type || 'Variation'}</span>
+        ${isTop ? '<span class="top-pick-badge">⭐ Recommended</span>' : `<span class="variation-score ${scoreClass}" style="margin-left:auto;">${v.score}/100</span>`}
+      </div>
+      <div class="validation-pills">${buildValidationPills(v.validation)}</div>
+      <div class="variation-body">
+        <div class="template-text" id="tmpl-${v.id}">${highlightPlaceholders(escapeHtml(template))}</div>
+        ${v.why ? `<div class="variation-rationale">${v.why}</div>` : ''}
+        <div class="variation-actions">
+          <button class="btn btn-ghost btn-sm copy-btn" data-template="${escapeAttr(template)}">📋 Copy</button>
+          <div class="feedback-row">
+            <span>Meta result:</span>
+            <button class="btn feedback-btn" data-id="${v.id}" data-action="approve" data-template="${escapeAttr(template)}" data-input="${escapeAttr(inputText)}">✓ Approved</button>
+            <button class="btn feedback-btn" data-id="${v.id}" data-action="reject" data-template="${escapeAttr(template)}" data-input="${escapeAttr(inputText)}">✗ Rejected</button>
+          </div>
+        </div>
+      </div>
+    `;
+    wrap.appendChild(card);
+  });
+
+  // Copy buttons
+  wrap.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.template)
+        .then(() => toast('✅ Copied to clipboard!', 'success'))
+        .catch(() => toast('❌ Failed to copy', 'error'));
+    });
+  });
+
+  // Feedback buttons
+  wrap.querySelectorAll('.feedback-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const approved = btn.dataset.action === 'approve';
+      submitFeedback(btn.dataset.input, btn.dataset.template, approved, btn);
+    });
+  });
+
+  $('results').classList.remove('hidden');
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escapeAttr(t) {
+  return t.replace(/"/g, '&quot;').replace(/\n/g, '\\n');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK
+// ═══════════════════════════════════════════════════════════════
+async function submitFeedback(userInput, variation, approved, btn) {
+  // Optimistic UI
+  const row = btn.parentElement;
+  row.querySelectorAll('.feedback-btn').forEach(b => b.classList.remove('approved','rejected'));
+  btn.classList.add(approved ? 'approved' : 'rejected');
+
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_input: userInput,
+        variation: variation.replace(/\\n/g, '\n'),
+        approved: approved,
+        rejection_reason: approved ? '' : 'Manual rejection'
+      })
+    });
+    toast(approved ? '✅ Marked as approved — added to training set' : '❌ Marked as rejected', approved ? 'success' : 'error');
+
+    // Update analytics
+    updateAnalyticsFromFeedback(approved);
+  } catch (e) {
+    toast('Failed to submit feedback', 'error');
+  }
+}
+
+let feedbackStats = JSON.parse(localStorage.getItem('tsc_feedback') || '{"approved":0,"rejected":0}');
+function updateAnalyticsFromFeedback(approved) {
+  if (approved) feedbackStats.approved++;
+  else feedbackStats.rejected++;
+  localStorage.setItem('tsc_feedback', JSON.stringify(feedbackStats));
+  updateHeaderStats();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATE
+// ═══════════════════════════════════════════════════════════════
+async function generate() {
+  const text = $('inputText').value.trim();
+  if (!text) { toast('Please enter a template request', 'error'); return; }
+
+  lastInput = text;
+  $('generateBtn').disabled = true;
+  $('regenerateBtn').disabled = true;
+  $('loadingWrap').classList.remove('hidden');
+  $('results').classList.add('hidden');
+  startLoadingAnim();
+
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: text })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server error');
+
+    currentData = data;
+    renderVariations(data, text);
+
+    // Save to history
+    const entry = {
+      id: Date.now(),
+      timestamp: Date.now(),
+      input: text,
+      data: data,
+      confidence: data.confidence,
+      count: data.variations?.length || 0
+    };
+    history.unshift(entry);
+    if (history.length > 100) history = history.slice(0, 100);
+    saveHistory();
+    updateHistoryBadge();
+    updateHeaderStats();
+
+  } catch (err) {
+    $('variationsWrap').innerHTML = `<div style="padding:16px;color:var(--error);font-size:13px;">Error: ${err.message}</div>`;
+    $('results').classList.remove('hidden');
+    toast('Generation failed — check server logs', 'error');
+  } finally {
+    stopLoadingAnim();
+    $('loadingWrap').classList.add('hidden');
+    $('generateBtn').disabled = false;
+    $('regenerateBtn').disabled = false;
+  }
+}
+
+$('generateBtn').addEventListener('click', generate);
+$('regenerateBtn').addEventListener('click', () => { if (lastInput) $('inputText').value = lastInput; generate(); });
+$('clearBtn').addEventListener('click', () => {
+  $('inputText').value = '';
+  $('charCount').textContent = '0 characters';
+  $('results').classList.add('hidden');
+  lastInput = '';
+});
+$('inputText').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generate();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════════════════════
+function updateHistoryBadge() {
+  $('historyBadge').textContent = history.length;
+}
+
+function renderHistoryList(filter = '') {
+  const list = $('historyList');
+  const filtered = history.filter(h => h.input.toLowerCase().includes(filter.toLowerCase()));
+
+  if (!filtered.length) {
+    list.innerHTML = `<div style="padding:32px 16px; text-align:center; color:var(--muted-2); font-size:13px;">
+      ${filter ? 'No sessions match your search.' : 'No sessions yet. Generate some templates.'}
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(h => `
+    <div class="history-item ${h.id === activeHistoryId ? 'active' : ''}" data-id="${h.id}">
+      <div class="history-item-prompt">${escapeHtml(h.input)}</div>
+      <div class="history-item-meta">
+        <span>${formatTime(h.timestamp)}</span>
+        <span class="history-item-count">${h.count} variations</span>
+        <span style="color:${h.confidence >= 80 ? 'var(--success)' : h.confidence >= 60 ? 'var(--warning)' : 'var(--error)'}; font-weight:700; font-size:10px;">${h.confidence}%</span>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.history-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const id = parseInt(item.dataset.id);
+      activeHistoryId = id;
+      const entry = history.find(h => h.id === id);
+      if (entry) renderHistoryDetail(entry);
+      list.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+}
+
+function renderHistoryDetail(entry) {
+  const panel = $('historyDetail');
+  panel.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Prompt</div>
+      <div style="font-size:14px;font-weight:600;color:var(--ink);line-height:1.6;padding:12px;background:var(--surface);border-radius:8px;border:1px solid var(--border);">${escapeHtml(entry.input)}</div>
+    </div>
+    <div class="meta-bar" style="margin-bottom:20px;">
+      <span class="meta-chip chip-utility">🛡️ Utility</span>
+      <span class="meta-divider"></span>
+      <span class="meta-chip ${entry.confidence >= 80 ? 'chip-confidence-high' : entry.confidence >= 60 ? 'chip-confidence-mid' : 'chip-confidence-low'}">Confidence: ${entry.confidence}/100</span>
+      <span class="meta-divider"></span>
+      <span class="meta-label">Generated:</span>
+      <span class="meta-value">${formatTime(entry.timestamp)}</span>
+    </div>
+    <div class="variations-grid" id="historyVariations"></div>
+  `;
+
+  const wrap = document.getElementById('historyVariations');
+  const vars = entry.data?.variations || [];
+  vars.forEach(v => {
+    const template = v.template || '(No content)';
+    const card = document.createElement('div');
+    card.className = 'variation-card';
+    card.innerHTML = `
+      <div class="variation-header">
+        <div class="variation-num">${v.id}</div>
+        <span class="variation-type">${v.type || 'Variation'}</span>
+      </div>
+      <div class="variation-body">
+        <div class="template-text">${highlightPlaceholders(escapeHtml(template))}</div>
+        <div class="variation-actions">
+          <button class="btn btn-ghost btn-sm copy-btn" data-template="${escapeAttr(template)}">📋 Copy</button>
+          <button class="btn btn-ghost btn-sm" onclick="reloadInGenerator('${escapeAttr(entry.input)}')">↺ Re-generate</button>
+        </div>
+      </div>
+    `;
+    wrap.appendChild(card);
+  });
+
+  wrap.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.template)
+        .then(() => toast('✅ Copied!', 'success'))
+        .catch(() => toast('❌ Failed to copy', 'error'));
+    });
+  });
+}
+
+function reloadInGenerator(input) {
+  $('inputText').value = input.replace(/\\n/g, '\n');
+  navLinks.forEach(l => l.classList.remove('active'));
+  sections.forEach(s => s.classList.remove('active'));
+  document.getElementById('generator').classList.add('active');
+  document.querySelector('[data-section="generator"]').classList.add('active');
+  toast('Input loaded — click Generate to run again');
+}
+
+$('historySearch').addEventListener('input', e => renderHistoryList(e.target.value));
+$('clearHistoryBtn').addEventListener('click', () => {
+  if (confirm('Clear all generation history?')) {
+    history = [];
+    saveHistory();
+    updateHistoryBadge();
+    renderHistoryList();
+    $('historyDetail').innerHTML = `<div class="history-empty"><div class="history-empty-icon">🕐</div><h3>Select a session</h3><p>Click a session on the left to view generated templates.</p></div>`;
+    toast('History cleared');
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYTICS
+// ═══════════════════════════════════════════════════════════════
+function renderAnalytics() {
+  const total = history.length;
+  const totalVariations = history.reduce((s, h) => s + (h.count || 0), 0);
+  const avgConf = total ? Math.round(history.reduce((s, h) => s + (h.confidence || 0), 0) / total) : 0;
+  const highConf = history.filter(h => (h.confidence || 0) >= 80).length;
+  const fb = feedbackStats;
+  const approvalRate = (fb.approved + fb.rejected) > 0
+    ? Math.round(fb.approved / (fb.approved + fb.rejected) * 100) : null;
+
+  // Stat cards
+  $('analyticsStats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total Sessions</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-sub">Template generation runs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Variations</div>
+      <div class="stat-value">${totalVariations}</div>
+      <div class="stat-sub">Across all sessions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Confidence</div>
+      <div class="stat-value">${total ? avgConf + '%' : '—'}</div>
+      <div class="stat-sub">${highConf} sessions ≥80%</div>
+      ${total ? `<div class="stat-trend ${avgConf >= 75 ? 'trend-up' : 'trend-down'}">${avgConf >= 75 ? '↑ Good' : '↓ Needs work'}</div>` : ''}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Meta Approval Rate</div>
+      <div class="stat-value">${approvalRate !== null ? approvalRate + '%' : '—'}</div>
+      <div class="stat-sub">${fb.approved} approved, ${fb.rejected} rejected</div>
+      ${approvalRate !== null ? `<div class="stat-trend ${approvalRate >= 75 ? 'trend-up' : 'trend-down'}">${approvalRate >= 75 ? '↑ On track' : '↓ Below target'}</div>` : ''}
+    </div>
+  `;
+
+  // Intent distribution
+  const intentCounts = {};
+  history.forEach(h => {
+    const intent = h.data?.variations?.[0]?.type || 'Unknown';
+    intentCounts[intent] = (intentCounts[intent] || 0) + 1;
+  });
+  const maxIntent = Math.max(1, ...Object.values(intentCounts));
+  const intentColors = ['#1A56DB','#3B82F6','#60A5FA','#93C5FD','#BFDBFE','#E0EDFF'];
+  $('intentChart').innerHTML = Object.entries(intentCounts)
+    .sort((a,b) => b[1]-a[1]).slice(0,6)
+    .map(([k,v], i) => `
+      <div class="intent-row">
+        <span class="intent-tag">${k}</span>
+        <div class="intent-bar-track"><div class="intent-bar-fill" style="width:${Math.round(v/maxIntent*100)}%;background:${intentColors[i]||'var(--accent)'}"></div></div>
+        <span class="intent-count">${v}</span>
+      </div>
+    `).join('') || '<div style="color:var(--muted-2);font-size:13px;">No data yet</div>';
+
+  // Validation pass rates
+  const checkNames = ['≤1024 chars','No exclamation','Sequential {{N}}','Details block','Action sentence','No promo words'];
+  const checkKeys = ['1024','exclamation','sequential','details block','ends with','promotional'];
+  const checkPass = checkKeys.map(k => {
+    const total2 = history.reduce((s,h) => s + (h.data?.variations?.length||0), 0);
+    if (!total2) return 0;
+    const fails = history.reduce((s,h) =>
+      s + (h.data?.variations||[]).filter(v => v.validation?.errors?.some(e => e.includes(k))).length, 0);
+    return Math.round((total2 - fails) / total2 * 100);
+  });
+  const barColors = ['#059669','#10B981','#34D399','#6EE7B7','#A7F3D0','#D1FAE5'];
+  $('validationChart').innerHTML = checkNames.map((n,i) => `
+    <div class="bar-row">
+      <span class="bar-label">${n}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${checkPass[i]}%;background:${barColors[i]}"></div></div>
+      <span class="bar-val">${checkPass[i]}%</span>
+    </div>
+  `).join('') || '<div style="color:var(--muted-2);font-size:13px;">No data yet</div>';
+
+  // Confidence donut
+  const high = history.filter(h=>(h.confidence||0)>=80).length;
+  const mid  = history.filter(h=>(h.confidence||0)>=60&&(h.confidence||0)<80).length;
+  const low  = history.filter(h=>(h.confidence||0)<60).length;
+  const total3 = Math.max(1, high+mid+low);
+  const hP = Math.round(high/total3*100), mP = Math.round(mid/total3*100), lP = 100-hP-mP;
+  const r=52, cx=60, cy=60, circ=2*Math.PI*r;
+  function arc(pct,offset) {
+    const d=circ*pct/100;
+    return `stroke-dasharray="${d} ${circ-d}" stroke-dashoffset="${-offset*circ/100}"`;
+  }
+  $('confidenceChart').innerHTML = `
+    <svg class="donut-svg" width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="14"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#059669" stroke-width="14" ${arc(hP,0)} transform="rotate(-90 60 60)"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#D97706" stroke-width="14" ${arc(mP,hP)} transform="rotate(-90 60 60)"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#DC2626" stroke-width="14" ${arc(lP,hP+mP)} transform="rotate(-90 60 60)"/>
+      <text x="${cx}" y="${cy-4}" text-anchor="middle" font-size="18" font-weight="700" fill="var(--ink)">${total}</text>
+      <text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="10" fill="var(--muted)">sessions</text>
+    </svg>
+    <div class="donut-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#059669"></div> High (≥80%) <span class="legend-val">${high}</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#D97706"></div> Medium (60–79%) <span class="legend-val">${mid}</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#DC2626"></div> Low (<60%) <span class="legend-val">${low}</span></div>
+    </div>
+  `;
+
+  // Variation type usage
+  const typeCounts = {};
+  history.forEach(h => (h.data?.variations||[]).forEach(v => {
+    typeCounts[v.type||'Unknown'] = (typeCounts[v.type||'Unknown']||0)+1;
+  }));
+  const maxType = Math.max(1, ...Object.values(typeCounts));
+  const typeColors = ['#1A56DB','#3B82F6','#60A5FA','#93C5FD','#BFDBFE'];
+  $('variationTypeChart').innerHTML = Object.entries(typeCounts)
+    .sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .map(([k,v],i)=>`
+      <div class="bar-row">
+        <span class="bar-label">${k}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxType*100)}%;background:${typeColors[i]||'var(--accent)'}"></div></div>
+        <span class="bar-val">${v}</span>
+      </div>
+    `).join('') || '<div style="color:var(--muted-2);font-size:13px;">No data yet</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEADER STATS
+// ═══════════════════════════════════════════════════════════════
+function updateHeaderStats() {
+  $('headerSessionCount').textContent = history.length;
+  const fb = feedbackStats;
+  const total = fb.approved + fb.rejected;
+  $('headerApprovalRate').textContent = total > 0
+    ? Math.round(fb.approved / total * 100) + '%' : '—';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DOCS — expandable cards
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('click', e => {
+  const card = e.target.closest('.doc-card');
+  if (!card) return;
+  const body = card.querySelector('.doc-body');
+  if (!body) return;
+  const isOpen = body.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.doc-body').forEach(b => b.classList.remove('open'));
+  document.querySelectorAll('.doc-card').forEach(c => c.classList.remove('expanded'));
+  // Toggle clicked
+  if (!isOpen) {
+    body.classList.add('open');
+    card.classList.add('expanded');
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+updateHistoryBadge();
+updateHeaderStats();
+{% endraw %}</script>
+</body>
+</html>

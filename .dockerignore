@@ -1,0 +1,10 @@
+venv/
+venv311/
+.env
+__pycache__/
+*.pyc
+.git
+.github
+models/          # if you have large model files
+*.pth
+*.bin
