@@ -1,38 +1,26 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import chromadb
 from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 from groq import Groq
 import json
 import os
-import sqlite3
 from dotenv import load_dotenv
 import traceback
 import re
+import secrets
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# ── SQLite feedback DB setup ──────────────────────────────────────────────
-def init_feedback_db():
-    conn = sqlite3.connect("feedback.db")
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_input TEXT,
-            variation TEXT,
-            approved INTEGER,
-            rejection_reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+# ── Secret key ────────────────────────────────────────────────────────────
+app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
-init_feedback_db()
+# ── Credentials ───────────────────────────────────────────────────────────
+VALID_EMAIL    = os.getenv("APP_EMAIL",    "abhishek.tiwari@thesleepcompany.in")
+VALID_PASSWORD = os.getenv("APP_PASSWORD", "Abhishek@123")
 
-# ── Load ChromaDB ─────────────────────────────────────────────────────────
+# ── ChromaDB ──────────────────────────────────────────────────────────────
 try:
     chroma_client = chromadb.PersistentClient(path="./whatsapp_template_db")
     onnx_ef = ONNXMiniLM_L6_V2()
@@ -47,7 +35,7 @@ try:
     print("ChromaDB collections loaded successfully")
 except Exception as e:
     print(f"Failed to load ChromaDB: {e}")
-    utility_coll = None
+    utility_coll   = None
     marketing_coll = None
 
 # ── Groq client ───────────────────────────────────────────────────────────
@@ -63,780 +51,753 @@ else:
         print(f"Groq initialization failed: {e}")
         groq_client = None
 
-# ── System prompt ─────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """You are a Meta WhatsApp Business API template compliance specialist for The Sleep Company.
+# ══════════════════════════════════════════════════════════════════════════
+# BANNED WORDS — words that must NEVER appear in template TEXT
+# Note: these can appear as variable VALUES (sent at message time), not in the template body
+# ══════════════════════════════════════════════════════════════════════════
+BANNED_WORDS_PATTERNS = [
+    # Discount / price
+    r'\bdiscount\b', r'\bdiscounts\b', r'\boffer\b', r'\boffers\b',
+    r'\bsale\b', r'\bsales\b', r'\bpromo\b', r'\bpromotion\b', r'\bpromotional\b',
+    r'\bcoupon\b', r'\bvoucher\b', r'\bcashback\b', r'\brebate\b',
+    r'\b\d+\s*%\s*off\b', r'\bflat\s+\d+', r'\bfree\s+gift\b',
+    r'\bbest\s+deal\b', r'\bbest\s+price\b', r'\bspecial\s+price\b',
+    r'\bno[- ]cost\s+emi\b', r'\bzero[- ]cost\s+emi\b',
+    # Loyalty / rewards
+    r'\bloyalty\b', r'\breward\b', r'\brewards\b',
+    r'\bpoints\b', r'\bperks?\b', r'\bbonus\b', r'\bincentive\b',
+    # Urgency
+    r'\bhurry\b', r'\blimited\s+time\b', r'\blast\s+chance\b',
+    r'\bdon\'t\s+miss\b', r'\bgrab\s+now\b', r'\bact\s+now\b',
+    r'\bexpires?\s+soon\b', r'\bwhile\s+stocks?\s+last\b',
+    r'\bshop\s+now\b', r'\bshop\s+before\b', r'\bbuy\s+now\b',
+    r'\bbook\s+now\b',
+    # Festivals / events
+    r'\brepublic\s+day\b', r'\bdiwali\b', r'\bfestive\b', r'\bseason\s+sale\b',
+    r'\bflash\s+sale\b', r'\bmega\s+sale\b', r'\bbig\s+sale\b',
+    r'\bholi\b', r'\bsalary\s+day\b', r'\beid\b', r'\bchristmas\s+sale\b',
+    r'\bnew\s+year\s+sale\b', r'\bblack\s+friday\b', r'\bcyber\s+monday\b',
+    # Superlatives / hype
+    r'\bexclusive\b', r'\bspecial\s+offer\b', r'\bunbeatable\b',
+    r'\bincredible\s+deal\b', r'\bamazing\s+deal\b', r'\bbest\s+ever\b',
+    r'\bdon\'t\s+wait\b', r'\btoday\s+only\b', r'\bonly\s+today\b',
+    # Marketing CTAs
+    r'\bclick\s+here\b', r'\bvisit\s+now\b', r'\border\s+now\b',
+    r'\bget\s+yours\b', r'\bclaim\b(?!\s+your\s+order)',
+    r'\bupgrade\s+now\b',
+]
 
-Your job is to take ANY user input — transactional, promotional, vague, or mixed — and rewrite it into a Meta-approved WhatsApp UTILITY template.
+MARKETING_SIGNALS = [
+    r'\d+\s*%\s*off', r'\bdiscount\b', r'\bsale\b', r'\boffer\b', r'\bpromo\b',
+    r'\brepublic\s+day\b', r'\bfestive\b', r'\bdiwali\b', r'\bflash\s+sale\b',
+    r'\blimited\s+time\b', r'\bhurry\b', r'\blast\s+chance\b', r'\bexclusive\b',
+    r'\bdeal\b', r'\bcoupon\b', r'\bvoucher\b', r'\bcashback\b', r'\bfree\s+gift\b',
+    r'\bloyalty\b', r'\breward\b', r'\bholi\b', r'\bsalary\s+day\b',
+    r'\bno.cost\s+emi\b', r'\bshop\s+now\b', r'\bshop\s+before\b',
+    r'\bbuy\s+now\b', r'\bbook\s+now\b', r'\bget\s+\d+', r'\bsave\s+\d+',
+    r'\b\d+\s*%\b',
+]
+
+UTILITY_ANCHORS = [
+    "order", "deliver", "dispatch", "shipped", "track",
+    "return", "refund", "exchange", "replace",
+    "visit", "store", "walked in", "came in",
+    "appointment", "booking", "schedule", "slot",
+    "trial", "100 night", "sleep trial",
+    "custom", "size", "measurement",
+    "review", "feedback", "rating",
+    "purchase", "bought", "received",
+    "invoice", "payment", "warranty", "installation",
+]
+
+def has_marketing_content(text: str) -> bool:
+    lower = text.lower()
+    return any(re.search(p, lower) for p in MARKETING_SIGNALS)
+
+def is_pure_promotion(user_input: str) -> bool:
+    lower      = user_input.lower()
+    has_promo  = has_marketing_content(lower)
+    has_anchor = any(anchor in lower for anchor in UTILITY_ANCHORS)
+    return has_promo and not has_anchor
+
+def _sentence_contains_banned(sentence: str) -> bool:
+    s = sentence.lower()
+    return any(re.search(p, s) for p in BANNED_WORDS_PATTERNS)
+
+# ══════════════════════════════════════════════════════════════════════════
+# SYSTEM PROMPT
+# ══════════════════════════════════════════════════════════════════════════
+SYSTEM_PROMPT = """You are a Meta WhatsApp Business API template compliance specialist for The Sleep Company (a premium mattress brand in India).
+
+Your ONLY job is to produce Meta-approved UTILITY templates — regardless of what the user gives you.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CORE RULE
+THE CORE STRATEGY — VARIABLE MASKING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You ALWAYS output Utility. Never Marketing. Never Mixed.
-classification must always be "Utility" in your JSON output.
+Meta reviews the TEMPLATE TEXT, not the VALUES that go into placeholders at send time.
 
-Your intelligence is used to figure out HOW to reframe the input as Utility —
-not whether to do it.
+THEREFORE:
+- Any promotional concept (sale, discount, offer, event name, % off) must become a {{variable}}
+- The template body uses only neutral, factual, utility-compliant language
+- The actual promotional value is inserted at send time — Meta never sees it
+
+EXAMPLE:
+Input: "45% off sale template"
+WRONG approach: Reject it or hallucinate a store visit template
+CORRECT approach:
+  Template: "Hi {{1}},\n\nWe have shared an update regarding your {{2}}.\n\nPlease find the details below:\nCustomer Name: {{1}}\nUpdate: {{2}}\nValid Until: {{3}}\n\nReply to this message if you need any assistance."
+
+At send time: {{2}} = "45% off sale on SmartGRID mattresses", {{3}} = "30 April 2026"
+Meta only sees: "We have shared an update regarding your {{2}}." — perfectly utility compliant.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO REFRAME ANY INPUT AS UTILITY
+BANNED WORDS — NEVER appear in template TEXT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Read the user input and decide which reframe path fits:
+These words must NOT appear anywhere in the template body. If the context requires them, replace with a {{variable}}:
 
-PATH A — IMAGE NOTIFICATION (use when input is promotional or campaign-based)
-The customer is being informed that an image has been shared with them.
-The actual offer or campaign details live inside the image — not in the template text.
-This is what makes it Utility: it is a notification that information has been sent,
-not a direct promotional message.
+discount, discounts, offer, offers, sale, sales, promo, promotion, promotional,
+coupon, voucher, cashback, rebate, free gift, best deal, best price, special price,
+loyalty, reward, rewards, points, perks, bonus, incentive,
+hurry, limited time, last chance, don't miss, grab now, act now, expires soon,
+while stocks last, shop now, shop before, buy now, book now, order now,
+exclusive, special offer, unbeatable, flash sale, mega sale, big sale, festive,
+republic day, diwali, holi, eid, salary day, christmas sale, new year sale, black friday,
+% off, flat X%, X% discount, no-cost EMI, zero cost EMI, incredible deal,
+amazing deal, best ever, don't wait, today only, claim now, upgrade now,
+click here, visit now, get yours
 
-CRITICAL FOR PATH A:
-You must read the input carefully and extract the SPECIFIC subject matter.
-Do NOT write generic shells like "details regarding the product" or
-"information about the update". That is lazy and will be rejected.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPLATE CLASSIFICATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For PURE MARKETING inputs (sale announcement, discount, offer — no transaction):
+  → Use IMAGE NOTIFICATION style (utility notification that an image/update has been shared)
+  → The promotional content becomes {{variable}} values
 
-Instead, derive the specific neutral topic from the input:
-- Input about sofa/chair marketing  -> {{2}} = "SmartGRID seating range overview"
-- Input about a sale campaign        -> {{2}} = "seasonal pricing update"
-- Input about a review request       -> {{2}} = "post-purchase feedback program"
-- Input about a product launch       -> {{2}} = "new product availability details"
-- Input about a festive campaign     -> {{2}} = "festive period product information"
-- Input about a massager/accessory   -> {{2}} = "comfort accessories range update"
+For MIXED inputs (has both transaction + promotion):
+  → Focus on the transactional part; put promotional content in a variable if needed
 
-The LLM must use its understanding of the input to write specific,
-meaningful placeholder labels — never filler text like "the product" or "the update".
+For UTILITY inputs (pure transactional):
+  → Standard 4-part utility structure
 
-Structure for Path A:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+APPROVED TEMPLATE STRUCTURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STRUCTURE A — IMAGE / UPDATE NOTIFICATION (for marketing inputs)
+Used when user wants to share a sale, offer, or campaign image with customers.
+
 Hi {{1}},
-We have shared an image with details regarding the {{2}}.
-The image contains information about the {{3}}.
-[one optional factual line about what to do next]
 
-Topic: {{2}}
-Reference: {{5}}
+We have shared an image corresponding to your {{2}} update.
 
-If you have any questions, please contact us at {{4}}.
+Customer Name: {{1}}
+Update Type: {{2}}
+Reference: {{3}}
 
-{{2}} must be a specific neutral topic name derived from the actual input.
-{{3}} must describe what the image specifically contains — no filler, no hype.
+Reply to this message for any assistance.
 
-PATH B — STANDARD 4-PART UTILITY (use when input is transactional)
-Order confirmations, delivery updates, returns, exchanges, appointments,
-store visits, custom orders, trial updates — anything triggered by a customer action.
+---
 
-Structure:
-PART 1 — What happened (1-2 sentences, factual)
-PART 2 — Current status or timeline (optional)
-PART 3 — Details block with Label: {{N}} lines
-PART 4 — One clear action or closing instruction
+STRUCTURE B — CUSTOMER UPDATE NOTIFICATION (for marketing inputs)
+Used when user wants to inform customers about something happening at TSC.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DETAILS BLOCK FORMAT — CRITICAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-The details block MUST follow this exact format for every variation:
+Dear {{1}},
 
-SomeLabel: {{N}}
-AnotherLabel: {{N}}
+We would like to inform you about an update from The Sleep Company.
 
-Rules:
-- The placeholder {{N}} must come DIRECTLY after the colon and space
-- Do NOT write "Label: SomeName - {{N}}" — the dash format is WRONG
-- Do NOT write "Label: {{N}} (description)" — nothing after the placeholder
-- Correct:   Product Name: {{2}}
-- Correct:   Order ID: {{3}}
-- Wrong:     Product Name - {{2}}
-- Wrong:     Label: Product Name - {{2}}
-- Wrong:     Product Name: SmartGRID Chair {{2}}
+Customer Name: {{1}}
+Update: {{2}}
+Date: {{3}}
 
-Every single variation MUST contain at least one line in this exact format.
+For any queries, please contact us at {{4}}.
+
+---
+
+STRUCTURE C — STANDARD UTILITY (for transactional inputs)
+Used for orders, returns, deliveries, bookings, etc.
+
+PART 1 — CONTEXT STATEMENT (1–2 sentences, factual)
+PART 2 — STATUS OR EXPLANATION (1–2 sentences, optional)
+PART 3 — KEY DETAILS BLOCK (label: {{N}} per line, minimum 2 fields)
+PART 4 — ACTION OR CLOSING (1 clear instruction)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PLACEHOLDER LANGUAGE RULES
+PLACEHOLDER RULES — CRITICAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Rules for Path A placeholders:
-- {{1}} = customer identifier (name, number)
-- {{2}} = the sale/campaign name variable — the placeholder REPRESENTS the name,
-           so the label can be "Sale Name: {{2}}" which is perfectly valid Utility.
-           The actual value (e.g. "End of Season Sale") goes in when sending.
-           Never hardcode "45% off" or any offer amount as literal body text.
-- {{3}} = a factual description of what the image contains — no hype, no claims
-- {{4}} = contact detail or store name
-
-Rules for Path B placeholders:
-- Use whatever labels fit the transaction
-- Always sequential: {{1}}, {{2}}, {{3}} — never skip numbers
+- Number placeholders sequentially in order of first appearance: {{1}}, {{2}}, {{3}} …
+- Every UNIQUE dynamic value gets its own unique number
+- NEVER reuse a number for a different value
+- If {{1}} = Customer Name in the greeting, it must still mean Customer Name in the details block
+- NEVER use {{CustomerName}} style — always {{1}}, {{2}} etc.
+- Images are sent as media headers — do NOT add an image placeholder variable
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-META UTILITY HARD RULES — apply to ALL output
+META UTILITY TONE RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- No promotional language anywhere in the template text
-- No discount amounts, no percentages, no urgency phrases
-- No emojis
 - No exclamation marks
-- No bullet lists
-- No vague closings like "feel free", "don't hesitate", "we're here for you"
-- One clear purpose per template
-- Tone: factual, professional, like an official notification
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BODY TEXT WORD BAN — CRITICAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-These words must NEVER appear as literal words in the template body text:
-"sale", "offer", "discount", "deal", "off", "% off"
-
-The ONLY exception: these words may appear as PART OF A PLACEHOLDER LABEL LINE.
-A placeholder label line is any line containing {{N}}.
-
-CORRECT — these are placeholder label lines (allowed):
-  Campaign Name: {{2}}
-  Offer Reference: {{3}}
-
-WRONG — these are body text sentences (never allowed):
-  "We have shared an image about the Sale."
-  "The image contains information about the sale details."
-  "Details regarding the Offer are in the image."
-
-The {{2}} placeholder IS the sale name — the body text describes it neutrally:
-  RIGHT: "We have shared an image with details regarding the {{2}}."
-  WRONG: "We have shared an image with details regarding the Sale."
-
-If you catch yourself writing "sale", "offer", or "discount" in a body sentence,
-STOP and replace it with {{2}} or a neutral phrase like "campaign update" or "pricing information".
+- No bullet point lists inside templates
+- No emojis used decoratively
+- No phrases: "don't hesitate", "feel free", "we'd love to", "hope you enjoyed", "we're here for you"
+- Tone: factual, neutral, professional, helpful
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VARIATION TYPES — generate EXACTLY 5
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Minimal — fewest fields, shortest version
-2. Specific — adds date, store, reference number
-3. Action-oriented — strong single CTA
-4. Confirmatory — asks customer to confirm receipt or action
-5. Informational — most complete version
+All 5 must use different phrasings and varying levels of detail. They must NOT all be the same.
+
+1. Minimal     — shortest, fewest placeholders, simplest language
+2. Specific    — more detail fields, reference number, date
+3. Action-oriented — clear CTA for customer to take next step
+4. Confirmatory   — asks customer to confirm receipt or acknowledge
+5. Informational  — most complete, explains what the update is about in neutral terms
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONFIDENCE SCORE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-After generating variations, rate your confidence (0-100) that these templates
-will be approved by Meta as Utility. Be honest — if the input was borderline
-or the reframe was difficult, score lower. Output this as "confidence" in JSON.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT — valid JSON only, no markdown
+OUTPUT FORMAT — valid JSON only, no markdown fences
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "classification": "Utility",
-  "confidence": 0-100,
-  "warning": null,
+  "input_classification": "Utility" | "Marketing" | "Mixed",
+  "output_classification": "Utility",
+  "promotional_content_detected": true | false,
+  "extracted_utility_context": "one sentence describing the utility context",
+  "warning": null | "message shown to user if promo content was detected",
   "variations": [
     {
       "id": 1,
       "type": "Minimal|Specific|Action-oriented|Confirmatory|Informational",
       "template": "full template text with {{1}} {{2}} etc.",
-      "why": "1-2 sentences explaining what makes this Meta-approvable"
+      "placeholder_map": {"{{1}}": "Customer Name", "{{2}}": "Campaign/Update Description", "{{3}}": "Date"},
+      "why": "1–2 sentences explaining why this passes Meta utility review"
     }
   ]
 }"""
 
-# ── Forbidden terms for utility sanitization ──────────────────────────────
-# Removed broad terms ("% off", "discount", "sale", "promo") that false-flag
-# valid placeholder labels like "Sale Name: {{2}}". Promo content is handled
-# by the LLM system prompt and validator Check 8 instead.
-FORBIDDEN_UTILITY_TERMS = [
-    "don't hesitate",
-    "feel free to",
-    "we'd love to",
-    "we would love to",
-    "hope you had a great",
-    "hope you enjoyed",
-    "glad you visited",
-    "we're here for you",
-    "anything else we can help",
-    "hurry",
-    "limited time offer",
-    "flash sale",
-    "exclusive offer",
-    "don't miss out",
-    "last chance",
-    "grab now",
-    "best deal",
-    "we appreciate your",
-    "thank you for choosing",
-    "valued customer",
-]
 
-# ── Generic shell phrases — indicate lazy Path A generation ───────────────
-GENERIC_SHELL_PHRASES = [
-    "details regarding the product",
-    "details regarding the update",
-    "image with details regarding the product",
-    "information about the product",
-    "information about the update",
-    "details about the product",
-    # Sale-specific generic shells the model falls back to
-    "details regarding the sale",
-    "information about the sale",
-    "details regarding the offer",
-    "information about the offer",
-    "details regarding the discount",
-]
-
-# ── Placeholder renumbering ───────────────────────────────────────────────
-def renumber_placeholders(template: str) -> str:
-    """
-    Renumbers all {{N}} placeholders in order of first appearance.
-    Ensures sequential numbering with no gaps.
-    e.g. {{1}}, {{3}}, {{5}} -> {{1}}, {{2}}, {{3}}
-    """
-    found = re.findall(r'\{\{(\d+)\}\}', template)
-    if not found:
-        return template
-
-    seen = {}
-    counter = 1
-    for num in found:
-        if num not in seen:
-            seen[num] = counter
-            counter += 1
-
-    def replacer(match):
-        original = match.group(1)
-        return "{{" + str(seen[original]) + "}}"
-
-    return re.sub(r'\{\{(\d+)\}\}', replacer, template)
-
-# ── Structure validator ───────────────────────────────────────────────────
-def validate_structure(template: str) -> dict:
-    """
-    Validates a generated template against Meta's structural requirements.
-    Returns { "valid": bool, "errors": [str] }
-    """
-    errors = []
-
-    # ── 1. Character limit ────────────────────────────────────────
-    if len(template) > 1024:
-        errors.append(f"Exceeds 1024 character limit ({len(template)} chars)")
-
-    # ── 2. Exclamation marks ──────────────────────────────────────
-    if "!" in template:
-        errors.append("Contains exclamation mark(s) — not allowed in Utility templates")
-
-    # ── 3. Placeholder sequencing ─────────────────────────────────
-    found = list(map(int, re.findall(r'\{\{(\d+)\}\}', template)))
-    if found:
-        expected = list(range(1, len(set(found)) + 1))
-        actual_unique = sorted(set(found))
-        if actual_unique != expected:
-            errors.append(
-                f"Placeholders are not sequential — found {actual_unique}, expected {expected}"
-            )
-
-    # ── 4. Details block check ────────────────────────────────────
-    # Fix: loosened regex — matches any line that contains a {{N}} placeholder
-    # Handles: "Product Name: {{2}}", "Topic: {{2}}", "Label: Name - {{2}}" etc.
-    label_line = re.search(r'^.+\{\{\d+\}\}', template, re.MULTILINE)
-    if not label_line:
-        errors.append(
-            "Missing details block — no label lines with {{N}} placeholders found. "
-            "Every template must have at least one line in format: 'Label: {{N}}'"
-        )
-
-    # ── 5. Minimum structure check ────────────────────────────────
-    lines = [l.strip() for l in template.strip().split('\n') if l.strip()]
-    if len(lines) < 3:
-        errors.append(
-            "Template too short — likely missing structural parts (Context / Details / Action)"
-        )
-
-    # ── 6. Action sentence at end ─────────────────────────────────
-    last_para = template.strip().split('\n\n')[-1].strip()
-    label_only = re.match(r'^(\w[\w\s]+\s*\{\{\d+\}\}\s*\n?)+$', last_para)
-    if label_only:
-        errors.append(
-            "Template ends with a details block — missing closing action sentence"
-        )
-
-    # ── 7. Generic shell detection ────────────────────────────────
-    # Catches templates that wrap without reading the actual input
-    template_lower = template.lower()
-    placeholder_count = len(re.findall(r'\{\{\d+\}\}', template))
-    is_generic = any(p in template_lower for p in GENERIC_SHELL_PHRASES)
-
-    if is_generic and placeholder_count < 3:
-        errors.append(
-            "Template is a generic shell — {{2}} and {{3}} must contain "
-            "meaningful specific labels derived from the actual input, not filler "
-            "like 'the product' or 'the update'"
-        )
-
-    # ── 8. Raw promotional content in body text ─────────────────
-    # Checks non-placeholder body lines only.
-    # "Sale Name: {{2}}" is a placeholder line — never flagged.
-    # "We have shared an image about the Sale." is body text — always flagged.
-    promo_body_patterns = [
-        r'\d+\s*%\s*(off|discount)',   # "45% off", "30% discount"
-        r'rs\.?\s*\d{3,}',             # "Rs. 5000"
-        r'\u20b9\s*\d+',               # "₹499"
-        r'\bflash sale\b',
-        r'\blast chance\b',
-        r'\blimited time\b',
-    ]
-    # Hardcoded promo words in body sentences (not label lines)
-    promo_body_words = [r'\bsale\b', r'\boffer\b', r'\bdiscount\b', r'\bdeal\b']
-
-    body_lines = [
-        l for l in template.split('\n')
-        if l.strip() and not re.search(r'\{\{\d+\}\}', l)
-    ]
-    body_text = ' '.join(body_lines)
-
-    promo_found = False
-    for pattern in promo_body_patterns:
-        if re.search(pattern, body_text, re.IGNORECASE):
-            promo_found = True
-            break
-    if not promo_found:
-        for pattern in promo_body_words:
-            if re.search(pattern, body_text, re.IGNORECASE):
-                promo_found = True
-                break
-
-    if promo_found:
-        errors.append(
-            "Template body contains hardcoded promotional word (sale/offer/discount/deal) "
-            "or raw promotional content. Use {{2}} as a variable instead. "
-            "WRONG: \'details regarding the Sale\' — "
-            "RIGHT: \'details regarding the {{2}}\'"
-        )
-
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors
-    }
-
-# ── Sanitize utility ──────────────────────────────────────────────────────
-def sanitize_utility(data):
-    """
-    Line-level sanitization — splits on newlines, not sentences.
-    Has a safety guard: if sanitization empties the template, restores original.
-    Removes tone-violation lines only — does NOT remove "sale" or "% off" since
-    those are legitimate placeholder label values after LLM reframing.
-    """
-    for var in data.get("variations", []):
-        original_template = var.get("template", "")
-        template = original_template
-        changed = False
-
-        # ── Line-level forbidden term removal ─────────────────────
-        lines = template.split('\n')
-        cleaned_lines = []
-        for line in lines:
-            flagged = any(term.lower() in line.lower() for term in FORBIDDEN_UTILITY_TERMS)
-            if flagged:
-                changed = True
-                print(f"[SANITIZE] Removed line: {line[:80]}")
-            else:
-                cleaned_lines.append(line)
-        template = '\n'.join(cleaned_lines)
-
-        # ── Safety: if sanitization emptied the template, restore ─
-        if not template.strip():
-            print("[SANITIZE] Template would be empty — restoring original")
-            var["template"] = original_template
-            var["why"] = (var.get("why", "") + " [sanitize skipped — review manually]").strip()
-            continue
-
-        # ── Hard exclamation mark removal ─────────────────────────
-        if "!" in template:
-            template = template.replace("!", "")
-            changed = True
-
-        # ── Remove decorative emojis ──────────────────────────────
-        emoji_pattern = re.compile(
-            "[\U00010000-\U0010ffff"
-            "\U0001F600-\U0001F64F"
-            "\U0001F300-\U0001F5FF"
-            "\U0001F680-\U0001F6FF"
-            "\U00002600-\U000027BF"
-            "\u2714\u2705\u274C\u2713\u2022"
-            "]+", flags=re.UNICODE
-        )
-        cleaned = emoji_pattern.sub("", template).strip()
-
-        # ── Remove bullet/checkmark lines ─────────────────────────
-        cleaned = re.sub(r'^\s*[✔✓•\-\*]\s*.+$', '', cleaned, flags=re.MULTILINE)
-        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
-
-        if cleaned != template:
-            changed = True
-
-        if changed:
-            var["template"] = cleaned
-            var["why"] = (
-                var.get("why", "") + " [auto-sanitized for Meta compliance]"
-            ).strip()
-
-    return data
-
-# ── Intent detection (LLM-based with keyword fallback) ───────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# INTENT DETECTION
+# ══════════════════════════════════════════════════════════════════════════
 def detect_intent(user_input: str) -> str:
-    """
-    Uses llama-3.1-8b-instant to detect intent.
-    Falls back to keyword matching if LLM call fails.
-    """
-    if groq_client:
-        try:
-            response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[{
-                    "role": "user",
-                    "content": f"""Classify the intent of this WhatsApp template request into exactly one of these labels:
-review_request, image_notification, order_update, return_refund,
-store_visit_followup, trial_update, appointment, custom_order, general
-
-Input: \"{user_input}\"
-
-Rules:
-- Use image_notification for any promotional, campaign, sale, offer, or marketing-style input
-- Use the most specific label that fits
-- Output ONLY the label, nothing else"""
-                }],
-                temperature=0,
-                max_tokens=20,
-            )
-            intent = response.choices[0].message.content.strip().lower()
-            valid_intents = [
-                "review_request", "image_notification", "order_update",
-                "return_refund", "store_visit_followup", "trial_update",
-                "appointment", "custom_order", "general"
-            ]
-            if intent in valid_intents:
-                return intent
-        except Exception as e:
-            print(f"[INTENT LLM ERROR] Falling back to keywords: {e}")
-
-    # ── Keyword fallback ──────────────────────────────────────────
     lower = user_input.lower()
     if any(k in lower for k in ["review", "feedback", "rate", "rating", "screenshot", "google review"]):
         return "review_request"
-    if any(k in lower for k in ["order", "dispatch", "shipped", "delivery", "track"]):
-        return "order_update"
     if any(k in lower for k in ["return", "refund", "exchange", "replace"]):
         return "return_refund"
-    if any(k in lower for k in ["visit", "store", "walked in", "came in", "in-store", "checking in"]):
-        return "store_visit_followup"
     if any(k in lower for k in ["trial", "100 night", "sleep trial"]):
         return "trial_update"
     if any(k in lower for k in ["appointment", "booking", "schedule", "slot"]):
         return "appointment"
     if any(k in lower for k in ["custom", "size", "measurement", "dimension"]):
         return "custom_order"
-    return "general"
+    if any(k in lower for k in ["visit", "store", "walked in", "came in", "in-store"]):
+        return "store_visit_followup"
+    if any(k in lower for k in ["order", "dispatch", "shipped", "delivery", "track"]):
+        return "order_update"
+    # Pure marketing / campaign → image notification
+    if has_marketing_content(lower):
+        return "image_notification"
+    return "customer_update"
 
-# ── Two-stage generation: Stage 1 ─────────────────────────────────────────
-def extract_intent_facts(user_input: str) -> dict:
+
+# ══════════════════════════════════════════════════════════════════════════
+# PLACEHOLDER RENUMBERING
+# ══════════════════════════════════════════════════════════════════════════
+def renumber_placeholders(template: str) -> str:
     """
-    Stage 1: Extract structured intent and facts from raw user input.
-    Returns clean JSON so Stage 2 never sees raw promotional language.
+    Ensures {{N}} placeholders are sequentially numbered from 1 in order of first appearance.
+    Preserves label-value associations (Label: {{N}} blocks).
     """
-    if not groq_client:
-        raise ValueError("Groq client not initialized")
+    lines        = template.split("\n")
+    lline        = re.compile(r"^([^:{{]+):\s*\{{(\d+)\}}\s*$")
+    ph           = re.compile(r"\{{(\d+)\}}")
 
-    response = groq_client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{
-            "role": "user",
-            "content": f"""Extract AND NEUTRALIZE the intent from this WhatsApp template request.
-Output ONLY valid JSON, no markdown:
+    occurrences  = []
+    for li, line in enumerate(lines):
+        m = lline.match(line.strip())
+        if m:
+            label, orig = m.group(1).strip(), m.group(2)
+            occurrences.append((li, orig, True, label))
+        else:
+            for match in ph.finditer(line):
+                occurrences.append((li, match.group(1), False, None))
 
-{{
-  "intent": "one sentence describing what this template is for — no promo language",
-  "path": "A or B — A for promotional/campaign, B for transactional",
-  "key_facts": ["list", "of", "neutral", "facts"],
-  "dynamic_fields": ["field1", "field2"],
-  "neutral_topic": "NEUTRALIZED topic for {{2}} — MUST NOT contain: sale, off, discount, offer, deal, %. Rephrase as an information update. Examples: seasonal pricing update, limited period campaign details, product pricing information, comfort range overview",
-  "image_contents": "NEUTRALIZED description of image contents — MUST NOT contain: sale, off, discount, offer, deal. Describe factually. Examples: applicable products and revised pricing, product specifications and pricing details, comfort product range and availability",
-  "tone_notes": "any tone or context notes"
-}}
+    counter          = [1]
+    key_to_new       = {}
+    orig_first_label = {}
 
-NEUTRALIZATION RULES — CRITICAL:
-- neutral_topic MUST NOT contain the words: sale, off, discount, offer, deal, %, price drop
-- image_contents MUST NOT contain the words: sale, off, discount, deal, offer
-- If input mentions a sale -> rephrase as: pricing update, campaign information, product pricing details
-- If input mentions a specific % like 45% -> do NOT include that number anywhere in your output
-- The actual sale name will be passed as runtime variable {{2}} — write the LABEL, not the VALUE
-- Wrong neutral_topic: "Sale", "45% off sale", "discount offer"
-- Correct neutral_topic: "seasonal pricing update", "limited period campaign details"
+    def next_num():
+        n = counter[0]; counter[0] += 1; return n
 
-Input: \"{user_input}\""""
-        }],
-        temperature=0,
-        max_tokens=500,
+    occurrence_new = []
+    for li, orig, is_label, label in occurrences:
+        if is_label:
+            key = ("label", label)
+            if key not in key_to_new:
+                key_to_new[key] = next_num()
+            occurrence_new.append(key_to_new[key])
+            if orig not in orig_first_label:
+                orig_first_label[orig] = label
+        else:
+            if orig in orig_first_label:
+                key = ("label", orig_first_label[orig])
+                occurrence_new.append(key_to_new[key])
+            else:
+                key = ("inline", orig)
+                if key not in key_to_new:
+                    key_to_new[key] = next_num()
+                occurrence_new.append(key_to_new[key])
+
+    occ_iter     = iter(zip(occurrences, occurrence_new))
+    result_lines = []
+    for li, line in enumerate(lines):
+        m = lline.match(line.strip())
+        if m:
+            (_, orig, _, _), new_num = next(occ_iter)
+            result_lines.append(re.sub(
+                r"\{{" + re.escape(orig) + r"\}}",
+                "{{" + str(new_num) + "}}", line, count=1))
+        else:
+            def replacer(match, _iter=occ_iter):
+                (_, orig, _, _), new_num = next(_iter)
+                return "{{" + str(new_num) + "}}"
+            result_lines.append(ph.sub(replacer, line))
+
+    return "\n".join(result_lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# STRUCTURE VALIDATION
+# ══════════════════════════════════════════════════════════════════════════
+def _has_details_block(template: str) -> bool:
+    field_pattern = re.compile(r'.+:\s*\{\{\d+\}\}')
+    field_lines   = [l for l in template.split('\n') if field_pattern.search(l.strip())]
+    return len(field_lines) >= 1   # relaxed to 1 for minimal image notification templates
+
+def _has_multiline_structure(template: str) -> bool:
+    non_empty = [l for l in template.split('\n') if l.strip()]
+    return len(non_empty) >= 3    # at least 3 non-empty lines
+
+def validate_structure(variations: list) -> list:
+    failed = []
+    for i, var in enumerate(variations):
+        t = var.get("template", "")
+        if not _has_details_block(t) or not _has_multiline_structure(t):
+            failed.append(i)
+            var["_structure_fail"] = True
+    return failed
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# POST-GENERATION SANITISATION
+# ══════════════════════════════════════════════════════════════════════════
+def sanitize_utility(data: dict) -> dict:
+    emoji_pattern = re.compile(
+        "[\U00010000-\U0010ffff"
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U00002600-\U000027BF"
+        "\u2714\u2705\u274C\u2713\u2022"
+        "]+", flags=re.UNICODE
     )
 
-    content = response.choices[0].message.content.strip()
-    content = re.sub(r'^```json\s*|\s*```$', '', content, flags=re.MULTILINE).strip()
-    return json.loads(content)
+    for var in data.get("variations", []):
+        template = var.get("template", "")
+        original = template
+        lines    = template.split('\n')
+        cleaned_lines = []
 
-# ── Generate variations ───────────────────────────────────────────────────
-def generate_variations(user_input: str):
+        for line in lines:
+            # Split by sentence, drop sentences with banned words
+            sentences      = re.split(r'(?<=[.?])\s+', line)
+            clean_sentences = [s for s in sentences if not _sentence_contains_banned(s)]
+            cleaned_line   = ' '.join(clean_sentences).strip()
+            if cleaned_line:
+                cleaned_lines.append(cleaned_line)
+
+        cleaned = '\n'.join(cleaned_lines)
+        cleaned = emoji_pattern.sub("", cleaned).strip()
+        cleaned = re.sub(r'^\s*[✔✓•\-\*]\s*.+$', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+
+        if cleaned != original:
+            var["template"] = cleaned
+        else:
+            var["template"] = cleaned
+
+        # Always renumber
+        var["template"] = renumber_placeholders(var["template"])
+
+    data["output_classification"] = "Utility"
+    data["classification"]        = "Utility"
+    return data
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# MAIN GENERATION
+# ══════════════════════════════════════════════════════════════════════════
+def generate_variations(user_input: str) -> dict:
     if not groq_client:
-        raise ValueError("Groq client not initialized")
-    if not utility_coll or not marketing_coll:
-        raise ValueError("ChromaDB collections not loaded")
+        raise ValueError("LLM client not initialized — check GROQ_API_KEY in .env")
+    if not utility_coll:
+        raise ValueError("ChromaDB utility collection not loaded")
 
-    # ── Stage 1: Extract structured intent ───────────────────────
-    extracted = None
-    try:
-        extracted = extract_intent_facts(user_input)
-        print(f"[DEBUG] Extracted: {extracted}")
-    except Exception as e:
-        print(f"[STAGE 1 ERROR] Falling back to raw input: {e}")
+    detected_intent    = detect_intent(user_input)
+    marketing_detected = has_marketing_content(user_input)
+    pure_promo         = is_pure_promotion(user_input)
 
-    # ── RAG: fetch approved examples ──────────────────────────────
-    util_res = utility_coll.query(query_texts=[user_input], n_results=6)
-    approved_examples = util_res['documents'][0] if util_res['documents'] else []
+    print(f"[DEBUG] Detected intent: {detected_intent}")
+    print(f"[DEBUG] Marketing content: {marketing_detected}, Pure promo: {pure_promo}")
 
-    mark_res = marketing_coll.query(query_texts=[user_input], n_results=3)
-    marketing_examples = mark_res['documents'][0] if mark_res['documents'] else []
-
-    detected_intent = detect_intent(user_input)
-
-    sep = "\n---\n"
-    approved_block = sep.join(approved_examples) if approved_examples else "None available"
-    marketing_block = (
-        "\n".join([f"{i+1}. {ex}" for i, ex in enumerate(marketing_examples)])
-        if marketing_examples else "None available"
-    )
-
-    # ── Stage 2: Build prompt from extracted facts only ───────────
-    if extracted:
-        path_label = (
-            "PATH A (Image Notification)"
-            if extracted.get("path") == "A"
-            else "PATH B (Standard 4-Part Utility)"
-        )
-        generation_context = f"""EXTRACTED INTENT SUMMARY — use this, NOT the raw input:
-Intent: {extracted.get('intent', '')}
-Path: {path_label}
-Key Facts: {', '.join(extracted.get('key_facts', []))}
-Dynamic Fields: {', '.join(extracted.get('dynamic_fields', []))}
-Neutral Topic for {{{{2}}}}: {extracted.get('neutral_topic', '')}
-Image Contents for {{{{3}}}}: {extracted.get('image_contents', '')}
-Tone Notes: {extracted.get('tone_notes', '')}
-
-IMPORTANT: Use the Neutral Topic above as the specific value context for {{{{2}}}} — never write "the product" or "the update"."""
+    # ── Determine generation mode ──────────────────────────────────────
+    if pure_promo:
+        input_classification = "Marketing"
+        generation_mode      = "image_notification"
+        # Extract the campaign essence (what is being announced)
+        campaign_essence     = _extract_campaign_essence(user_input)
+        print(f"[DEBUG] Campaign essence: {campaign_essence}")
+    elif marketing_detected:
+        input_classification = "Mixed"
+        generation_mode      = "mixed"
+        campaign_essence     = None
     else:
-        generation_context = f'USER INPUT (direct fallback): "{user_input}"'
+        input_classification = "Utility"
+        generation_mode      = "utility"
+        campaign_essence     = None
 
-    base_prompt = f"""DETECTED INTENT: {detected_intent}
+    # ── RAG retrieval ──────────────────────────────────────────────────
+    # Use campaign essence as query for better RAG results on marketing inputs
+    rag_query = campaign_essence if campaign_essence else user_input
+    util_res  = utility_coll.query(query_texts=[rag_query], n_results=6)
+    approved_examples = util_res['documents'][0] if util_res.get('documents') else []
+    sep              = "\n---\n"
+    approved_block   = sep.join(approved_examples) if approved_examples else "None available"
 
-{generation_context}
+    # ── Build generation prompt ────────────────────────────────────────
+    if generation_mode == "image_notification":
+        mode_instructions = f"""
+GENERATION MODE: IMAGE / UPDATE NOTIFICATION (Variable Masking)
 
-APPROVED TEMPLATES FROM DATABASE — study their structure:
+The user wants to send a promotional message. Your task is to generate utility-compliant
+templates where ALL promotional content is replaced by {{{{variables}}}}.
+
+Campaign essence extracted: "{campaign_essence}"
+
+KEY RULES FOR THIS MODE:
+1. The word "sale", "offer", "discount", "% off" etc. must NOT appear in the template text
+2. Instead, reference it as {{{{2}}}} (e.g. "your {{{{2}}}} update" where {{{{2}}}} = "45% off sale")
+3. Use IMAGE NOTIFICATION or UPDATE NOTIFICATION structure
+4. Keep neutral language: "update", "information", "details", "notification"
+5. Always include: Customer Name {{{{1}}}}, the masked promo content {{{{2}}}}, at minimum
+6. Add a placeholder_map in your JSON showing what each variable represents at send time
+
+CORRECT EXAMPLE:
+Template: "Hi {{{{1}}}},\\n\\nWe have shared an image corresponding to your {{{{2}}}} update.\\n\\nCustomer Name: {{{{1}}}}\\nUpdate: {{{{2}}}}\\nValid Until: {{{{3}}}}\\n\\nReply to this message for any assistance."
+placeholder_map: {{"{{{{1}}}}": "Customer Name", "{{{{2}}}}": "45% off sale on SmartGRID", "{{{{3}}}}": "30 April 2026"}}
+
+Generate 5 DISTINCT variations — different phrasings, different placeholder counts, different structures.
+DO NOT generate 5 identical or near-identical templates."""
+
+    elif generation_mode == "mixed":
+        mode_instructions = f"""
+GENERATION MODE: MIXED (Transactional + Promotional)
+
+The input contains both a transaction AND promotional elements.
+Focus on the TRANSACTIONAL part. Any promotional details become {{{{variables}}}}.
+
+User input: "{user_input}"
+Detected intent: {detected_intent}
+
+Put the transactional context in neutral utility language.
+If promotional content is needed, it goes into a variable placeholder."""
+
+    else:
+        mode_instructions = f"""
+GENERATION MODE: STANDARD UTILITY
+
+The input is a pure utility / transactional context.
+Detected intent: {detected_intent}
+
+Use the standard 4-part utility structure.
+User input: "{user_input}" """
+
+    base_prompt = f"""APPROVED UTILITY TEMPLATES FROM DATABASE (study structure, do NOT copy verbatim):
 {approved_block}
 
-MARKETING EXAMPLES — reference for what NOT to do:
-{marketing_block}
+INPUT FROM USER: "{user_input}"
+{mode_instructions}
 
-TASK:
-- Generate EXACTLY 5 Utility variations
-- classification must always be "Utility"
-- Choose path from extracted intent above
-- Every variation MUST have a details block with lines in format: SomeLabel: {{{{N}}}}
-  The placeholder must come DIRECTLY after the colon — no dashes between label and placeholder
-- Do NOT collapse into one paragraph — preserve line-break structure
-- Output ONLY valid JSON with confidence score"""
+TASK: Generate EXACTLY 5 Utility variations.
+- input_classification: "{input_classification}"
+- output_classification: "Utility"
+- promotional_content_detected: {str(marketing_detected).lower()}
+- Each variation MUST be meaningfully different from the others
+- ZERO banned words in any template text
+- Output ONLY valid JSON — no markdown, no explanation"""
 
-    # ── JSON newline fixer (used across all calls) ────────────────
-    def fix_json_newlines(s):
-        result = []
-        in_string = False
-        escape_next = False
-        for ch in s:
-            if escape_next:
-                result.append(ch)
-                escape_next = False
-            elif ch == '\\':
-                result.append(ch)
-                escape_next = True
-            elif ch == '"':
-                in_string = not in_string
-                result.append(ch)
-            elif ch == '\n' and in_string:
-                result.append('\\n')
-            elif ch == '\r' and in_string:
-                result.append('\\r')
-            elif ch == '\t' and in_string:
-                result.append('\\t')
-            else:
-                result.append(ch)
-        return ''.join(result)
-
-    def parse_and_clean(raw_content):
-        """Parse JSON, restore newlines, renumber placeholders, force Utility."""
-        raw_content = re.sub(r'^```json\s*|\s*```$', '', raw_content, flags=re.MULTILINE).strip()
-        raw_content = fix_json_newlines(raw_content)
-        data = json.loads(raw_content)
-        for var in data.get("variations", []):
-            if "template" in var:
-                var["template"] = var["template"].replace('\\n', '\n')
-                var["template"] = renumber_placeholders(var["template"])
-        data["classification"] = "Utility"
-        if data.get("warning") in ["null", "none", "None", ""]:
-            data["warning"] = None
-        return data
-
-    def get_failures(data):
-        """Return list of failure dicts for any variation that fails validation."""
-        failures = []
-        for var in data.get("variations", []):
-            r = validate_structure(var.get("template", ""))
-            if not r["valid"]:
-                failures.append({
-                    "id": var.get("id", "?"),
-                    "type": var.get("type", ""),
-                    "template_preview": var.get("template", "")[:150],
-                    "errors": r["errors"]
-                })
-        return failures
-
+    # ── Call LLM ──────────────────────────────────────────────────────
     try:
-        # ── Primary generation call ────────────────────────────────
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": base_prompt}
+                {"role": "user",   "content": base_prompt}
             ],
-            temperature=0.25,
-            max_tokens=2500,
+            temperature=0.3,
+            max_tokens=3000,
         )
+
         content = response.choices[0].message.content.strip()
-        parsed = parse_and_clean(content)
+        content = re.sub(r'^```json\s*|\s*```$', '', content, flags=re.MULTILINE).strip()
+        content = _fix_json_newlines(content)
+        parsed  = json.loads(content)
+
+        # Restore literal newlines in templates
+        for var in parsed.get("variations", []):
+            if "template" in var:
+                var["template"] = var["template"].replace('\\n', '\n')
 
         if not isinstance(parsed.get("variations"), list) or len(parsed["variations"]) == 0:
             raise ValueError("No variations in model response")
 
-        # ── Fix-retry: structural failures ────────────────────────
-        failures = get_failures(parsed)
-        if failures:
-            failure_detail = "\n".join([
-                f"Variation {f['id']} ({f['type']}):\n"
-                f"  Template preview: {f['template_preview']}...\n"
-                f"  Errors: {'; '.join(f['errors'])}"
-                for f in failures
-            ])
+        # ── Ensure variation count ────────────────────────────────────
+        if len(parsed["variations"]) < 5:
+            parsed = _request_more_variations(parsed, content, base_prompt, generation_mode, campaign_essence)
 
-            neutral_topic = extracted.get('neutral_topic', 'derive from input context') if extracted else 'derive from input context'
-            image_contents = extracted.get('image_contents', 'derive from input context') if extracted else 'derive from input context'
+        # ── Structure validation + auto-fix ──────────────────────────
+        failed_indices = validate_structure(parsed["variations"])
+        if failed_indices:
+            print(f"[WARNING] {len(failed_indices)} variation(s) failed structure check")
+            parsed = _fix_structure(parsed, content, base_prompt, failed_indices, generation_mode)
 
-            fix_prompt = f"""The following variations failed structural validation. Rewrite ALL 5 from scratch.
+        # ── Normalise metadata ────────────────────────────────────────
+        parsed["output_classification"] = "Utility"
+        parsed["classification"]        = "Utility"
+        parsed["input_classification"]  = input_classification
 
-FAILURES:
-{failure_detail}
-
-ROOT CAUSES AND HOW TO FIX THEM:
-
-1. "Missing details block" error:
-   Every variation needs lines in this exact format:
-     Sale Name: {{{{2}}}}
-     Reference: {{{{4}}}}
-   Placeholder {{{{N}}}} must come DIRECTLY after the colon and a space.
-   WRONG: "Label: Name - {{{{2}}}}"  |  WRONG: "Name: SmartGRID {{{{2}}}}"
-   RIGHT: "Sale Name: {{{{2}}}}"     |  RIGHT: "Reference: {{{{4}}}}"
-
-2. "Generic shell" error:
-   You wrote filler like "the product" or "the update".
-   Use these specific values from the extracted intent:
-     Neutral Topic for {{{{2}}}}: {neutral_topic}
-     Image Contents for {{{{3}}}}: {image_contents}
-
-3. "Template ends with details block" error:
-   End every template with a plain action sentence:
-   "If you have any questions, please contact us at {{{{5}}}}."
-
-4. "Not sequential" error:
-   Use {{{{1}}}}, {{{{2}}}}, {{{{3}}}} in strict order — no gaps.
-
-5. Remove ALL exclamation marks — none allowed in Utility templates.
-
-6. Raw promotional content error:
-   Do not put "45% off" or any discount amount in the body text.
-   The placeholder {{{{2}}}} represents the sale name as a variable.
-   Example correct label: "Sale Name: {{{{2}}}}"
-
-Original input context: "{user_input[:300]}"
-
-Rewrite all 5 correctly. Output ONLY valid JSON."""
-
-            response2 = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": base_prompt},
-                    {"role": "assistant", "content": content},
-                    {"role": "user", "content": fix_prompt}
-                ],
-                temperature=0.25,
-                max_tokens=2500,
+        if marketing_detected:
+            parsed["warning"] = (
+                "Promotional content detected. All sale/offer/discount references have been "
+                "replaced with {{variables}} — your template text is Meta utility-compliant. "
+                "Supply the actual promotional values at send time."
             )
-            content2 = response2.choices[0].message.content.strip()
-            parsed2 = parse_and_clean(content2)
+        elif parsed.get("warning") in ["null", "none", "None", "", None]:
+            parsed["warning"] = None
 
-            if isinstance(parsed2.get("variations"), list) and len(parsed2["variations"]) >= 5:
-                parsed = parsed2
-                print("[FIX-RETRY] Applied structural fix")
-
-        # ── Fix-retry: fewer than 5 variations ────────────────────
-        if len(parsed.get("variations", [])) < 5:
-            fix_prompt2 = f"""You returned only {len(parsed['variations'])} variations.
-I need EXACTLY 5: Minimal, Specific, Action-oriented, Confirmatory, Informational.
-Each must have a details block with lines in format: SomeLabel: {{{{N}}}}
-Output ONLY valid JSON with the same structure."""
-
-            response3 = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": base_prompt},
-                    {"role": "assistant", "content": content},
-                    {"role": "user", "content": fix_prompt2}
-                ],
-                temperature=0.25,
-                max_tokens=2500,
-            )
-            content3 = response3.choices[0].message.content.strip()
-            parsed3 = parse_and_clean(content3)
-
-            if isinstance(parsed3.get("variations"), list) and len(parsed3["variations"]) >= 5:
-                parsed = parsed3
-                print("[FIX-RETRY] Applied count fix")
-
-        # ── Sanitize ───────────────────────────────────────────────
+        # ── Final sanitisation ────────────────────────────────────────
         parsed = sanitize_utility(parsed)
 
-        # ── Re-number IDs cleanly ──────────────────────────────────
+        for var in parsed.get("variations", []):
+            var.pop("_structure_fail", None)
+
         for i, var in enumerate(parsed["variations"]):
             var["id"] = i + 1
-
-        # ── Attach per-variation validation results ────────────────
-        for var in parsed["variations"]:
-            var["validation"] = validate_structure(var.get("template", ""))
 
         return parsed
 
     except json.JSONDecodeError as je:
-        print(f"[JSON ERROR] {je}")
+        print(f"[JSON ERROR] Raw content:\n{content[:800]}\n{je}")
         raise RuntimeError("Model returned invalid JSON — try rephrasing your input")
     except Exception as e:
         traceback.print_exc()
         raise RuntimeError(f"Generation failed: {str(e)}")
 
 
-# ── Routes ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════════
+
+def _fix_json_newlines(s: str) -> str:
+    result      = []
+    in_string   = False
+    escape_next = False
+    for ch in s:
+        if escape_next:
+            result.append(ch); escape_next = False
+        elif ch == '\\':
+            result.append(ch); escape_next = True
+        elif ch == '"':
+            in_string = not in_string; result.append(ch)
+        elif ch == '\n' and in_string:
+            result.append('\\n')
+        elif ch == '\r' and in_string:
+            result.append('\\r')
+        elif ch == '\t' and in_string:
+            result.append('\\t')
+        else:
+            result.append(ch)
+    return ''.join(result)
+
+
+def _extract_campaign_essence(user_input: str) -> str:
+    """
+    Pull out what the campaign is actually about in a neutral phrase.
+    e.g. "Give me 45% off sale template" → "45% off sale"
+         "Republic Day discount 30% off on mattresses" → "Republic Day offer on mattresses"
+    Uses a lightweight LLM call.
+    """
+    prompt = f"""Extract the core campaign/offer topic from the input below.
+Return ONLY a short phrase (3–10 words) describing what the campaign is about, without any promotional framing.
+Examples:
+  "Give me a 45% off sale template" → "45% off sale on The Sleep Company products"
+  "Republic Day 30% discount on SmartGRID" → "Republic Day discount on SmartGRID mattress"
+  "Holi offer template for our customers" → "Holi season offer for customers"
+  "Send loyalty reward message" → "loyalty reward for customers"
+
+Input: "{user_input}"
+
+Reply with ONLY the short phrase. No explanation, no JSON."""
+
+    try:
+        resp = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=60,
+        )
+        essence = resp.choices[0].message.content.strip().strip('"').strip("'")
+        return essence or user_input
+    except Exception:
+        return user_input
+
+
+def _request_more_variations(parsed: dict, content: str, base_prompt: str,
+                              generation_mode: str, campaign_essence) -> dict:
+    fix_prompt = f"""You returned only {len(parsed['variations'])} variations. I need EXACTLY 5.
+Types required: Minimal, Specific, Action-oriented, Confirmatory, Informational.
+All must be pure Utility with zero banned words.
+{"Use image/update notification structure with variable masking for promotional content." if generation_mode == "image_notification" else ""}
+{"Campaign essence: " + campaign_essence if campaign_essence else ""}
+Each variation must be MEANINGFULLY DIFFERENT from the others.
+Output ONLY valid JSON with the same structure."""
+
+    resp2 = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system",    "content": SYSTEM_PROMPT},
+            {"role": "user",      "content": base_prompt},
+            {"role": "assistant", "content": content},
+            {"role": "user",      "content": fix_prompt}
+        ],
+        temperature=0.3,
+        max_tokens=3000,
+    )
+    c2 = re.sub(r'^```json\s*|\s*```$', '',
+                response2.choices[0].message.content.strip(),
+                flags=re.MULTILINE).strip()
+    try:
+        p2 = json.loads(_fix_json_newlines(c2))
+        if isinstance(p2.get("variations"), list) and len(p2["variations"]) >= 5:
+            for var in p2["variations"]:
+                if "template" in var:
+                    var["template"] = var["template"].replace('\\n', '\n')
+            return p2
+    except Exception:
+        pass
+    return parsed
+
+
+def _fix_structure(parsed: dict, content: str, base_prompt: str,
+                   failed_indices: list, generation_mode: str) -> dict:
+    failed_types = [parsed["variations"][i].get("type", "unknown") for i in failed_indices]
+    print(f"[DEBUG] Fixing structure for: {failed_types}")
+
+    fix_prompt = f"""The following variation types have incorrect structure: {", ".join(failed_types)}
+
+Each template MUST:
+- Have at minimum 3 non-empty lines
+- Include at least one "Label: {{{{N}}}}" field line
+- Have distinct paragraphs (separated by blank lines)
+
+{"For IMAGE NOTIFICATION mode: use 'Hi {{{{1}}}},\\n\\nWe have shared [neutral description] regarding your {{{{2}}}} update.\\n\\nCustomer Name: {{{{1}}}}\\n[Detail]: {{{{2}}}}\\n\\nReply for assistance.' pattern" if generation_mode == "image_notification" else ""}
+
+Regenerate ONLY these failed types. Output ONLY valid JSON with the same root structure.
+Failed types: {", ".join(failed_types)}"""
+
+    resp_fix = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system",    "content": SYSTEM_PROMPT},
+            {"role": "user",      "content": base_prompt},
+            {"role": "assistant", "content": content},
+            {"role": "user",      "content": fix_prompt}
+        ],
+        temperature=0.2,
+        max_tokens=2000,
+    )
+    fix_raw = re.sub(r'^```json\s*|\s*```$', '',
+                     resp_fix.choices[0].message.content.strip(),
+                     flags=re.MULTILINE).strip()
+    fix_raw = _fix_json_newlines(fix_raw)
+
+    try:
+        fix_parsed    = json.loads(fix_raw)
+        fix_vars      = fix_parsed.get("variations", [])
+        fixed_by_type = {v.get("type", "").lower(): v for v in fix_vars}
+        for idx in failed_indices:
+            var_type = parsed["variations"][idx].get("type", "").lower()
+            if var_type in fixed_by_type:
+                fv = fixed_by_type[var_type]
+                fv["template"] = fv["template"].replace("\\n", "\n")
+                parsed["variations"][idx] = fv
+                print(f"  [Fixed] {var_type}")
+    except Exception as fix_err:
+        print(f"[WARNING] Structure fix parse failed: {fix_err} — keeping originals")
+
+    return parsed
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# AUTH
+# ══════════════════════════════════════════════════════════════════════════
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ROUTES
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route("/login", methods=["GET"])
+def login_page():
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
+    return render_template("login.html")
+
+
+@app.route("/login", methods=["POST"])
+def login_post():
+    data     = request.get_json(silent=True) or {}
+    email    = (data.get("email")    or "").strip().lower()
+    password = (data.get("password") or "").strip()
+
+    if email == VALID_EMAIL.lower() and password == VALID_PASSWORD:
+        session.permanent    = False
+        session['logged_in'] = True
+        session['user_email']= email
+        return jsonify({"success": True})
+    else:
+        return jsonify({"success": False, "message": "Invalid email or password."}), 401
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for('login_page'))
+
+
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 
 @app.route("/api/generate", methods=["POST"])
+@login_required
 def generate():
     print("[DEBUG] /api/generate called")
     try:
@@ -847,9 +808,11 @@ def generate():
         user_input = data["input"].strip()
         if not user_input:
             return jsonify({"error": "Input cannot be empty"}), 400
+        if len(user_input) > 2000:
+            return jsonify({"error": "Input too long — keep it under 2000 characters"}), 400
 
-        print(f"[DEBUG] Input: {user_input[:150]}{'...' if len(user_input) > 150 else ''}")
-        print(f"[DEBUG] Intent: {detect_intent(user_input)}")
+        print(f"[DEBUG] User input: {user_input[:150]}{'...' if len(user_input) > 150 else ''}")
+        print(f"[DEBUG] Marketing: {has_marketing_content(user_input)}, Pure promo: {is_pure_promotion(user_input)}")
 
         result = generate_variations(user_input)
         return jsonify(result)
@@ -857,93 +820,11 @@ def generate():
     except Exception as e:
         traceback.print_exc()
         return jsonify({
-            "error": str(e) or "Failed to generate templates",
-            "classification": "Utility",
-            "confidence": 0,
-            "warning": "Generation failed — try rephrasing or check server logs",
-            "variations": []
+            "error":          str(e) or "Failed to generate templates",
+            "classification": "Error",
+            "warning":        "Generation failed — try rephrasing or check server logs",
+            "variations":     []
         }), 500
-
-
-@app.route("/api/validate", methods=["POST"])
-def validate():
-    """
-    Lightweight endpoint — validates a single template string.
-    Used by frontend inline edit + re-validate flow.
-    No Groq calls — purely rule-based.
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or "template" not in data:
-            return jsonify({"error": "Missing 'template' field"}), 400
-
-        template = data["template"].strip()
-        if not template:
-            return jsonify({"error": "Template cannot be empty"}), 400
-
-        return jsonify(validate_structure(template))
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/feedback", methods=["POST"])
-def feedback():
-    """
-    Logs Meta approval/rejection feedback.
-    If approved, auto-ingests the template into ChromaDB utility_coll
-    so it improves future generation quality.
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"error": "Missing request body"}), 400
-
-        user_input       = data.get("user_input", "")
-        variation        = data.get("variation", "")
-        approved         = 1 if data.get("approved") else 0
-        rejection_reason = data.get("rejection_reason", "")
-
-        # ── Write to SQLite ───────────────────────────────────────
-        conn = sqlite3.connect("feedback.db")
-        c = conn.cursor()
-        c.execute(
-            "INSERT INTO feedback (user_input, variation, approved, rejection_reason) "
-            "VALUES (?, ?, ?, ?)",
-            (user_input, variation, approved, rejection_reason)
-        )
-        conn.commit()
-        row_id = c.lastrowid
-        conn.close()
-        print(f"[FEEDBACK] Logged row {row_id} — approved={approved}")
-
-        # ── Auto-ingest approved templates into ChromaDB ──────────
-        ingested = False
-        if approved and variation and utility_coll:
-            try:
-                existing = utility_coll.get(where={"source": "feedback"})
-                next_id = len(existing["ids"]) + 1
-                doc_id = f"feedback_{row_id}_{next_id}"
-                utility_coll.add(
-                    documents=[variation],
-                    ids=[doc_id],
-                    metadatas=[{
-                        "source": "feedback",
-                        "user_input": user_input[:200],
-                        "feedback_id": row_id
-                    }]
-                )
-                ingested = True
-                print(f"[FEEDBACK] Ingested into ChromaDB as {doc_id}")
-            except Exception as ce:
-                print(f"[FEEDBACK] ChromaDB ingest failed: {ce}")
-
-        return jsonify({"success": True, "id": row_id, "ingested": ingested})
-
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

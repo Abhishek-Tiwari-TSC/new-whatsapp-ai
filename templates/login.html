@@ -395,20 +395,14 @@
 </div>
 
 <script>
-  // ── Shared fetch headers (fixes ngrok interstitial returning HTML instead of JSON) ──
-  const FETCH_HEADERS = {
-    'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true'
-  };
-
-  const form      = document.getElementById('loginForm');
-  const emailEl   = document.getElementById('email');
-  const passEl    = document.getElementById('password');
-  const togglePwd = document.getElementById('togglePwd');
-  const submitBtn = document.getElementById('submitBtn');
-  const btnText   = document.getElementById('btnText');
-  const errorMsg  = document.getElementById('errorMsg');
-  const errorText = document.getElementById('errorText');
+  const form       = document.getElementById('loginForm');
+  const emailEl    = document.getElementById('email');
+  const passEl     = document.getElementById('password');
+  const togglePwd  = document.getElementById('togglePwd');
+  const submitBtn  = document.getElementById('submitBtn');
+  const btnText    = document.getElementById('btnText');
+  const errorMsg   = document.getElementById('errorMsg');
+  const errorText  = document.getElementById('errorText');
 
   togglePwd.addEventListener('click', () => {
     const isText = passEl.type === 'text';
@@ -428,14 +422,14 @@
     try {
       const res  = await fetch('/login', {
         method:  'POST',
-        headers: FETCH_HEADERS,
+        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email: emailEl.value.trim(), password: passEl.value })
       });
       const data = await res.json();
 
       if (data.success) {
-        btnText.textContent  = '✓ Redirecting…';
-        window.location.href = '/';
+        btnText.textContent   = '✓ Redirecting…';
+        window.location.href  = '/';
       } else {
         emailEl.classList.add('error-field');
         passEl.classList.add('error-field');
